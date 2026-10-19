@@ -19,9 +19,21 @@ android {
         }
     }
 
+    signingConfigs {
+        // 固定 debug 签名：CI 每次都用同一套密钥，新版本才能覆盖安装而不丢数据。
+        // 这是公开的调试密钥，不可用于正式发布。
+        create("fixedDebug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("fixedDebug")
         }
         release {
             isMinifyEnabled = false
