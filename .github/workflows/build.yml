@@ -24,13 +24,35 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
+      - name: Configure preinstalled Android SDK
         run: |
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          yes | sdkmanager --licenses || true
+          set -euo pipefail
+          # ubuntu-latest 已预装 Android SDK，直接复用，避免 setup-android 的许可交互失败
+          SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          export ANDROID_HOME="$SDK_ROOT"
+          export ANDROID_SDK_ROOT="$SDK_ROOT"
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+
+          SDKMANAGER=""
+          for candidate in "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+                           "$SDK_ROOT"/cmdline-tools/*/bin/sdkmanager; do
+            if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
+          done
+          if [ -z "$SDKMANAGER" ]; then
+            echo "未找到 sdkmanager，列出 SDK 目录："
+            ls -la "$SDK_ROOT" || true
+            exit 1
+          fi
+          echo "使用 sdkmanager: $SDKMANAGER"
+
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+          echo "--- 已安装组件 ---"
+          ls "$SDK_ROOT/platforms" || true
+          ls "$SDK_ROOT/build-tools" || true
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
       - name: Fetch bundled Ubuntu rootfs
         run: |
