@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 终端提示符 >_ 与一个机器人轮廓，简洁且有辨识度 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#3DDC97"
+        android:pathData="M40,38 L54,49 L40,60 L36,55 L46,49 L36,43 Z" />
+    <path
+        android:fillColor="#3DDC97"
+        android:pathData="M58,58 h16 v4 h-16 z" />
+    <path
+        android:strokeColor="#2AA876"
+        android:strokeWidth="2.5"
+        android:fillColor="#00000000"
+        android:pathData="M30,28 h48 a6,6 0 0 1 6,6 v40 a6,6 0 0 1 -6,6 h-48 a6,6 0 0 1 -6,-6 v-40 a6,6 0 0 1 6,-6 z" />
+</vector>

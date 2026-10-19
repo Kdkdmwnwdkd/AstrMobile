@@ -1,0 +1,350 @@
+package com.astrmobile.core.container
+
+import com.astrmobile.core.common.AppLog
+import com.astrmobile.core.common.RingBuffer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.time.ZoneId
+
+/**
+ * 容器生命周期控制器。
+ *
+ * 设计上刻意与 ElymBot 的“脚本 + 前台服务”解耦：
+ * 这里只负责「进程是否活着 / 端口是否通 / 日志在哪里」，
+ * 保活由 Android 前台服务负责，UI 通过 StateFlow 订阅。
+ */
+class ContainerController(
+    private val paths: ContainerPaths,
+    private val logSink: (String) -> Unit = {},
+) {
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val mutex = Mutex()
+
+    private val _state = MutableStateFlow<ContainerState>(ContainerState.Stopped)
+    val state: StateFlow<ContainerState> = _state.asStateFlow()
+
+    private val buffer = RingBuffer<String>(capacity = 3000)
+    private val _logs = MutableStateFlow<List<String>>(emptyList())
+    val logs: StateFlow<List<String>> = _logs.asStateFlow()
+
+    private var process: Process? = null
+    private var pumpJob: Job? = null
+    private var healthJob: Job? = null
+
+    /** 由 UI 在启动前注入的 apt 镜像，默认清华 ubuntu-ports。 */
+    var aptMirror: String = "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports"
+
+    /** 异常退出后是否自动重启。开启后息屏被系统杀掉也能自愈。 */
+    var autoRestartEnabled: Boolean = true
+
+    private var restartAttempts = 0
+    private var userStopRequested = false
+    private var restartJob: Job? = null
+
+    fun refreshInstallState() {
+        _state.value = when {
+            !paths.isRootfsInstalled() || !paths.isToolchainReady() -> ContainerState.NotInstalled
+            process?.isAlive == true -> _state.value
+            else -> ContainerState.Stopped
+        }
+    }
+
+    suspend fun start(): Result<Unit> = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            if (process?.isAlive == true) {
+                return@withLock Result.success(Unit)
+            }
+            if (!paths.isRootfsInstalled() || !paths.isToolchainReady()) {
+                _state.value = ContainerState.NotInstalled
+                return@withLock Result.failure(IllegalStateException("容器环境尚未安装完成"))
+            }
+
+            runCatching {
+                _state.value = ContainerState.Starting
+                userStopRequested = false
+                paths.ensureDirectories()
+                if (paths.stopSentinel.exists()) paths.stopSentinel.delete()
+                prepareRootfsConfig()
+                appendLog(AppLog.container("启动容器：${paths.rootfsDir.absolutePath}"))
+
+                val argv = listOf("/bin/bash", "/root/start.sh")
+                val command = ProotCommand.build(
+                    paths = paths,
+                    workdir = "/root",
+                    argv = argv,
+                    containerEnv = ProotCommand.defaultContainerEnv(paths, currentTimezone()),
+                )
+
+                val builder = ProcessBuilder(command)
+                    .directory(paths.filesDir)
+                    .redirectErrorStream(true)
+                ProotCommand.applyHostEnvironment(builder, paths)
+
+                val started = builder.start()
+                process = started
+                started.safePid()?.let { pid ->
+                    runCatching { paths.pidFile.writeText(pid.toString()) }
+                }
+
+                pumpJob = scope.launch { pumpOutput(started) }
+                startHealthLoop(started)
+            }
+        }
+    }
+
+    suspend fun stop(): Unit = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            userStopRequested = true
+            restartJob?.cancel()
+            restartJob = null
+            restartAttempts = 0
+            val current = process ?: run {
+                _state.value = ContainerState.Stopped
+                return@withLock
+            }
+            _state.value = ContainerState.Stopping
+            appendLog(AppLog.container("请求停止容器"))
+            runCatching { paths.stopSentinel.writeText("1") }
+
+            // 先温和终止：proot 会把信号转发给容器内的 AstrBot / NapCat。
+            runCatching { current.destroy() }
+            val exited = waitForExit(current, timeoutMs = 8_000)
+            if (!exited) {
+                appendLog(AppLog.container("优雅退出超时，强制结束进程"))
+                runCatching { current.destroyForcibly() }
+                waitForExit(current, timeoutMs = 3_000)
+            }
+
+            cleanupAfterExit()
+        }
+    }
+
+    /** 杀掉上次遗留的进程（App 被系统杀死后常见）。 */
+    suspend fun killStaleProcess() {
+        val pid = runCatching { paths.pidFile.readText().trim().toLong() }.getOrNull() ?: return
+        if (pid <= 0) return
+        // 只能操作本应用自己的进程，走 shell kill 并忽略失败。
+        runCatching {
+            Runtime.getRuntime().exec(arrayOf("/system/bin/kill", "-9", pid.toString()))
+            appendLog(AppLog.container("尝试清理遗留进程 pid=$pid"))
+        }
+        runCatching { paths.pidFile.delete() }
+    }
+
+    fun snapshotLogs(): List<String> = _logs.value
+
+    fun clearLogs() {
+        buffer.clear()
+        _logs.value = emptyList()
+        runCatching { paths.containerLog.writeText("") }
+    }
+
+    fun shutdown() {
+        scope.launch {
+            runCatching { stop() }
+        }
+    }
+
+    private fun prepareRootfsConfig() {
+        val etc = File(paths.rootfsDir, "etc")
+        etc.mkdirs()
+        File(etc, "resolv.conf").writeText(
+            """
+            nameserver 223.5.5.5
+            nameserver 119.29.29.29
+            nameserver 8.8.8.8
+            """.trimIndent() + "\n",
+        )
+        File(etc, "hostname").writeText("astrmobile\n")
+        File(etc, "hosts").writeText(
+            """
+            127.0.0.1 localhost astrmobile
+            ::1 localhost
+            """.trimIndent() + "\n",
+        )
+        File(etc, "apt").mkdirs()
+        File(etc, "apt/sources.list").writeText(
+            """
+            deb [trusted=yes] $aptMirror noble main restricted universe multiverse
+            deb [trusted=yes] $aptMirror noble-updates main restricted universe multiverse
+            deb [trusted=yes] $aptMirror noble-security main restricted universe multiverse
+            deb [trusted=yes] $aptMirror noble-backports main restricted universe multiverse
+            """.trimIndent() + "\n",
+        )
+        File(etc, "apt/sources.list.d").mkdirs()
+        runCatching {
+            File(etc, "apt/apt.conf.d").mkdirs()
+            File(etc, "apt/apt.conf.d/99astrmobile").writeText(
+                """
+                Acquire::Retries "3";
+                Acquire::http::Timeout "30";
+                Acquire::https::Timeout "30";
+                Acquire::Languages "none";
+                APT::Sandbox::User "root";
+                APT::Get::AllowUnauthenticated "true";
+                """.trimIndent() + "\n",
+            )
+        }
+    }
+
+    private fun pumpOutput(target: Process) {
+        val stream = target.inputStream.bufferedReader(Charsets.UTF_8)
+        try {
+            stream.useLines { lines ->
+                lines.forEach { line ->
+                    if (line.isNotBlank()) {
+                        appendLog(line)
+                    }
+                }
+            }
+        } catch (error: Throwable) {
+            appendLog(AppLog.error("CT", "读取容器输出失败", error))
+        } finally {
+            val exit = runCatching { target.exitValue() }.getOrDefault(-1)
+            appendLog(AppLog.container("容器进程退出，exit=$exit"))
+            if (_state.value !is ContainerState.Stopping) {
+                when {
+                    exit == 0 -> _state.value = ContainerState.Stopped
+                    shouldAutoRestart() -> scheduleRestart(exit)
+                    else -> _state.value = ContainerState.Failed(
+                        "容器进程异常退出（exit=$exit），请查看日志",
+                    )
+                }
+            }
+            cleanupAfterExit()
+        }
+    }
+
+    private fun shouldAutoRestart(): Boolean =
+        autoRestartEnabled &&
+            !userStopRequested &&
+            restartAttempts < MAX_RESTART_ATTEMPTS &&
+            paths.isRootfsInstalled()
+
+    /**
+     * 指数退避重启：5s → 20s → 60s。
+     * 只对“异常退出”生效；用户主动停止不会被拉起来。
+     */
+    private fun scheduleRestart(exitCode: Int) {
+        restartAttempts++
+        val delaySeconds = when (restartAttempts) {
+            1 -> 5
+            2 -> 20
+            else -> 60
+        }
+        _state.value = ContainerState.Restarting(
+            attempt = restartAttempts,
+            maxAttempts = MAX_RESTART_ATTEMPTS,
+            delaySeconds = delaySeconds,
+            lastReason = "exit=$exitCode",
+        )
+        appendLog(
+            AppLog.container(
+                "容器异常退出（exit=$exitCode），${delaySeconds}s 后执行第 ${restartAttempts}/$MAX_RESTART_ATTEMPTS 次自动重启",
+            ),
+        )
+        restartJob?.cancel()
+        restartJob = scope.launch {
+            delay(delaySeconds * 1000L)
+            if (!userStopRequested) {
+                appendLog(AppLog.container("开始自动重启容器"))
+                start()
+            }
+        }
+    }
+
+    private fun startHealthLoop(target: Process) {
+        healthJob?.cancel()
+        healthJob = scope.launch {
+            var astrbotReady = false
+            var napcatReady = false
+            var healthyTicks = 0
+            while (isActive && target.isAlive) {
+                astrbotReady = probePort(paths.astrbotPort)
+                napcatReady = probePort(paths.napcatPort)
+                if (_state.value is ContainerState.Starting ||
+                    _state.value is ContainerState.Running
+                ) {
+                    _state.value = ContainerState.Running(astrbotReady, napcatReady)
+                }
+                // 稳定运行 60s 后清零重启计数，避免历史故障导致后续无法自愈
+                healthyTicks = if (astrbotReady || napcatReady) healthyTicks + 1 else 0
+                if (healthyTicks >= 30) restartAttempts = 0
+                delay(2_000)
+            }
+        }
+    }
+
+    private fun probePort(port: Int): Boolean = runCatching {
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress("127.0.0.1", port), 400)
+            true
+        }
+    }.getOrDefault(false)
+
+    private fun appendLog(line: String) {
+        buffer.add(line)
+        _logs.value = buffer.snapshot()
+        runCatching {
+            paths.logDir.mkdirs()
+            if (paths.containerLog.length() > 8L * 1024 * 1024) {
+                paths.containerLog.writeText("")
+            }
+            paths.containerLog.appendText(line + "\n")
+        }
+        logSink(line)
+    }
+
+    private fun waitForExit(target: Process, timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (!target.isAlive) return true
+            Thread.sleep(120)
+        }
+        return !target.isAlive
+    }
+
+    private fun cleanupAfterExit() {
+        healthJob?.cancel()
+        healthJob = null
+        process = null
+        pumpJob = null
+        runCatching { paths.pidFile.delete() }
+        val current = _state.value
+        if (current is ContainerState.Starting || current is ContainerState.Running) {
+            _state.value = ContainerState.Stopped
+        }
+    }
+
+    private fun currentTimezone(): String = runCatching {
+        ZoneId.systemDefault().id
+    }.getOrDefault("Asia/Shanghai")
+
+    /**
+     * Android 的 java.lang.Process 直到较新 API 才暴露 pid()，
+     * 这里用反射兜底：拿不到就算了，不影响启停（启停走 Process 引用）。
+     */
+    private fun Process.safePid(): Long? = runCatching {
+        val method = javaClass.getMethod("pid")
+        (method.invoke(this) as? Number)?.toLong()
+    }.getOrNull()
+
+    companion object {
+        private const val MAX_RESTART_ATTEMPTS = 3
+    }
+}
