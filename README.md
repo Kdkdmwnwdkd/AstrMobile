@@ -2,6 +2,29 @@
 
 > 手机上的 AstrBot + QQ 机器人。装一个 App，把一台 Android 手机变成 24 小时在线的 AI 机器人主机。
 
+## 下载
+
+| 来源 | 链接 |
+|---|---|
+| 最新构建（每次推送自动更新） | [Releases · latest](https://github.com/Kdkdmwnwdkd/AstrMobile/releases/tag/latest) |
+| 国内加速直链 | `https://gh-proxy.com/https://github.com/Kdkdmwnwdkd/AstrMobile/releases/download/latest/app-debug.apk` |
+
+- 架构：`arm64-v8a`（仅此一种）
+- 最低系统：Android 8.0（API 26）
+- 签名：仓库内固定 debug keystore，**可覆盖升级，不会丢数据**
+
+## 自动构建
+
+推送到 `main` 触发 GitHub Actions：
+
+```
+checkout → JDK 17 → 复用 runner 预装 Android SDK → 下载并 SHA-256 校验 rootfs
+        → assembleDebug → apksigner 验签 → 上传 artifact → 更新 latest Release
+```
+
+`ubuntu-latest` 自带 Android SDK，因此不依赖 `setup-android`（它在许可协议交互上会失败）。
+rootfs（62MB）不纳入版本库，构建时从 ElymBot 仓库拉取并按固定哈希校验。
+
 ## 这是什么
 
 AstrMobile 是一个 **Android 端的 AstrBot 启动器**：
