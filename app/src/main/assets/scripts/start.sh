@@ -10,6 +10,9 @@ export LANG=C.UTF-8
 # 不设的话 NapCat 会自动随机化，且只在「QQ 登录成功后」才告知。
 export NAPCAT_WEBUI_SECRET_KEY="${NAPCAT_WEBUI_SECRET_KEY:-astrmobile}"
 
+# 端口也固定，否则被占用时 NapCat 会静默换一个，App 仍按 6099 连就会连不上。
+export NAPCAT_WEBUI_PREFERRED_PORT=6099
+
 echo "[start] 容器已启动 $(date '+%F %T')"
 echo "[start] 工作目录: $(pwd)"
 
