@@ -40,7 +40,10 @@ object Routes {
     const val Conversations = "conversations"
     const val PluginConfig = "pluginconfig/{pluginId}"
 
-    fun pluginConfig(pluginId: String) = "pluginconfig/$pluginId"
+    // 目录名理论上不含特殊字符，但导航参数必须编码，
+    // 否则带 / 或空格的名字会把路由切错段。
+    fun pluginConfig(pluginId: String) =
+        "pluginconfig/${android.net.Uri.encode(pluginId)}"
     const val Web = "web/{port}"
 
     fun web(port: Int) = "web/$port"
