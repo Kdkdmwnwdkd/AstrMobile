@@ -173,6 +173,8 @@ if not dash.get("password") and not dash.get("pbkdf2_password"):
     print("[start] 已设置 AstrBot 后台默认口令（astrbot）")
 
 # 开启 aiocqhttp，等 NapCat 连进来。
+# 只碰自己建的这一条（id=qq_astrmobile）：如果用户已经在网页里配过别的
+# aiocqhttp（端口可能不同），覆盖它会让 NapCat 连不上，属于破坏性操作。
 desired = {
     "id": "qq_astrmobile",
     "type": "aiocqhttp",
@@ -183,12 +185,23 @@ desired = {
 }
 platforms = cfg.setdefault("platform", [])
 existing = next(
-    (item for item in platforms if isinstance(item, dict) and item.get("type") == "aiocqhttp"),
+    (item for item in platforms
+     if isinstance(item, dict) and item.get("id") == "qq_astrmobile"),
     None,
 )
+others = [
+    item for item in platforms
+    if isinstance(item, dict)
+    and item.get("type") == "aiocqhttp"
+    and item.get("id") != "qq_astrmobile"
+]
+
 if existing is None:
-    platforms.append(desired)
-    changed = True
+    if others:
+        print("[start] 检测到你已自建 aiocqhttp 平台，跳过自动配置")
+    else:
+        platforms.append(desired)
+        changed = True
 else:
     if any(existing.get(k) != v for k, v in desired.items()):
         changed = True
