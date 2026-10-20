@@ -58,7 +58,7 @@ class ContainerController(
 
     fun refreshInstallState() {
         _state.value = when {
-            !paths.isRootfsInstalled() || !paths.isToolchainReady() -> ContainerState.NotInstalled
+            !paths.isRootfsInstalled() -> ContainerState.NotInstalled
             process?.isAlive == true -> _state.value
             else -> ContainerState.Stopped
         }
@@ -69,7 +69,9 @@ class ContainerController(
             if (process?.isAlive == true) {
                 return@withLock Result.success(Unit)
             }
-            if (!paths.isRootfsInstalled() || !paths.isToolchainReady()) {
+            // 只拦"rootfs 不存在"；可执行入口的缺失交给下面的 BinaryInstaller 自愈，
+            // 否则软链断裂会导致"环境不就绪 → 不许启动 → 永远修不好"的死锁。
+            if (!paths.isRootfsInstalled()) {
                 _state.value = ContainerState.NotInstalled
                 return@withLock Result.failure(IllegalStateException("容器环境尚未安装完成"))
             }
@@ -78,6 +80,14 @@ class ContainerController(
                 _state.value = ContainerState.Starting
                 userStopRequested = false
                 paths.ensureDirectories()
+
+                // 每次启动前重新校验可执行入口：APK 覆盖升级后 nativeLibraryDir 会变，
+                // 旧软链会指向已删除的目录，容器会以 "Permission denied" 直接失败。
+                val missing = BinaryInstaller(paths).install()
+                check(missing.isEmpty()) {
+                    "APK 缺少原生组件：${missing.joinToString()}，请确认安装的是 arm64 专用包"
+                }
+
                 if (paths.stopSentinel.exists()) paths.stopSentinel.delete()
                 prepareRootfsConfig()
                 appendLog(AppLog.container("启动容器：${paths.rootfsDir.absolutePath}"))
@@ -103,6 +113,9 @@ class ContainerController(
 
                 pumpJob = scope.launch { pumpOutput(started) }
                 startHealthLoop(started)
+            }.onFailure { error ->
+                appendLog(AppLog.error("CT", "容器启动失败", error))
+                _state.value = ContainerState.Failed(error.message ?: "容器启动失败")
             }
         }
     }
@@ -137,14 +150,28 @@ class ContainerController(
     /** 杀掉上次遗留的进程（App 被系统杀死后常见）。 */
     suspend fun killStaleProcess() {
         val pid = runCatching { paths.pidFile.readText().trim().toLong() }.getOrNull() ?: return
-        if (pid <= 0) return
-        // 只能操作本应用自己的进程，走 shell kill 并忽略失败。
+        if (pid <= 0) {
+            runCatching { paths.pidFile.delete() }
+            return
+        }
+
+        // pid 会被系统复用：必须先确认这个 pid 确实是 proot，否则可能误杀无关进程。
+        val cmdline = runCatching { File("/proc/$pid/cmdline").readText() }.getOrNull()
+        if (cmdline == null || !cmdline.contains("proot")) {
+            appendLog(AppLog.container("跳过清理：pid=$pid 已不是容器进程"))
+            runCatching { paths.pidFile.delete() }
+            return
+        }
+
         runCatching {
             Runtime.getRuntime().exec(arrayOf("/system/bin/kill", "-9", pid.toString()))
-            appendLog(AppLog.container("尝试清理遗留进程 pid=$pid"))
+            appendLog(AppLog.container("清理遗留容器进程 pid=$pid"))
         }
         runCatching { paths.pidFile.delete() }
     }
+
+    /** 允许外部（如安装流程）把日志并入统一时间线，保证导出时能看到完整现场。 */
+    fun pushLog(line: String) = appendLog(line)
 
     fun snapshotLogs(): List<String> = _logs.value
 

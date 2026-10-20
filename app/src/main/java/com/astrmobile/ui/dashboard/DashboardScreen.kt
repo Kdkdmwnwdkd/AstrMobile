@@ -173,7 +173,7 @@ fun DashboardScreen(
                     }
                 } else {
                     Button(
-                        onClick = { startWithService(context, viewModel) },
+                        onClick = { startWithService(context) },
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),
@@ -326,7 +326,7 @@ private fun describe(state: ContainerState): Pair<String, Color> = when (state) 
             Color(0xFFFFB454)
 }
 
-private fun startWithService(context: Context, viewModel: MainViewModel) {
+private fun startWithService(context: Context) {
+    // 只走 Service：它会在启动容器前读取用户配置的镜像源并持有唤醒锁
     ContainerService.start(context, alsoStartContainer = true)
-    viewModel.startContainer()
 }

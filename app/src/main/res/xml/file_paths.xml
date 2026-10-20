@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 只暴露日志目录：导出排错日志用，绝不把 rootfs 或配置目录交给外部应用 -->
 <paths>
     <files-path name="runtime_logs" path="runtime/logs/" />
-    <files-path name="runtime_install" path="runtime/" />
 </paths>

@@ -32,10 +32,21 @@ fun AppNav(viewModel: MainViewModel) {
     val ready by viewModel.environmentReady.collectAsStateWithLifecycle()
 
     LaunchedEffect(ready) {
-        if (ready && navController.currentDestination?.route == Routes.Onboarding) {
-            navController.navigate(Routes.Home) {
-                popUpTo(Routes.Onboarding) { inclusive = true }
-                launchSingleTop = true
+        val current = navController.currentDestination?.route
+        when {
+            // 环境就绪且仍在向导页 → 进入控制台
+            ready && current == Routes.Onboarding -> {
+                navController.navigate(Routes.Home) {
+                    popUpTo(Routes.Onboarding) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+            // 环境被清除（或首次未安装）却停留在其它页面 → 回到向导
+            !ready && current != null && current != Routes.Onboarding -> {
+                navController.navigate(Routes.Onboarding) {
+                    popUpTo(0) { inclusive = true }
+                    launchSingleTop = true
+                }
             }
         }
     }
@@ -61,7 +72,10 @@ fun AppNav(viewModel: MainViewModel) {
                 onOpenConsole = { navController.navigate(Routes.Console) },
                 onOpenSettings = { navController.navigate(Routes.Settings) },
                 onOpenWeb = { port -> navController.navigate(Routes.web(port)) },
-                onRepair = { navController.navigate(Routes.Onboarding) },
+                onRepair = {
+                    viewModel.prepareReinstall()
+                    navController.navigate(Routes.Onboarding)
+                },
             )
         }
 

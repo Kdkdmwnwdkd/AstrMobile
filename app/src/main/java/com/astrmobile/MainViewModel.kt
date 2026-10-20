@@ -58,6 +58,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 },
                 onLine = { line ->
                     _installLogs.value = (_installLogs.value + line).takeLast(400)
+                    // 同时并入容器日志：安装失败时用户导出的就是这一份完整现场
+                    controller.pushLog(line)
                 },
                 pipIndex = current.pipIndex,
                 githubProxy = current.githubProxy,
@@ -78,6 +80,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun stopContainer() {
         viewModelScope.launch { controller.stop() }
+    }
+
+    fun prepareReinstall() {
+        // 用户从控制台点"重新安装"时，环境通常仍不完整；把上一轮的 Done 状态清掉，
+        // 否则向导会一直停在"环境已就绪"，看不到安装按钮。
+        if (!_environmentReady.value) {
+            _installStage.value = Bootstrapper.Stage.Idle
+            _installLogs.value = emptyList()
+        }
     }
 
     fun clearLogs() = controller.clearLogs()

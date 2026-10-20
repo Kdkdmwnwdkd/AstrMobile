@@ -73,7 +73,9 @@ class RootfsInstaller(
             }
         }
 
-        check(paths.isRootfsInstalled()) { "rootfs 解压完成但缺少关键文件（usr/bin/env 或 bin/bash）" }
+        check(File(paths.rootfsDir, "usr/bin/env").exists()) { "rootfs 解压完成但缺少 usr/bin/env" }
+        check(File(paths.rootfsDir, "bin/bash").exists()) { "rootfs 解压完成但缺少 bin/bash" }
+        paths.markRootfsInstalled()
         onProgress(1f, "rootfs 解压完成")
         AppLog.app("rootfs 解压完成：${paths.rootfsDir.absolutePath}")
     }

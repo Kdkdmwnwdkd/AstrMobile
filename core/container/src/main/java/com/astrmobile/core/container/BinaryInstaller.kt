@@ -34,8 +34,14 @@ class BinaryInstaller(private val paths: ContainerPaths) {
                 if (mapping.required) missing += mapping.source
                 return@forEach
             }
-            if (!mapping.target.exists() || !isUsable(mapping.target)) {
+            // 关键：APK 升级后 nativeLibraryDir 路径会变（/data/app/~~xxx==/...-1/lib），
+            // 旧的软链会指向已不存在的目录。必须校验链接目标是否就是当前 source，
+            // 不能只看 target.exists()（断裂软链会被误判为"可能需要重建"，普通旧文件则完全漏判）。
+            if (needsLink(source, mapping.target)) {
                 linkOrCopy(source, mapping.target)
+            }
+            if (mapping.required) {
+                diagnoseExecutable(source)
             }
             if (mapping.target.name != "libtalloc.so.2") {
                 runCatching { Os.chmod(mapping.target.absolutePath, 0b111101101) } // 0755
@@ -44,9 +50,29 @@ class BinaryInstaller(private val paths: ContainerPaths) {
         return missing
     }
 
-    private fun isUsable(target: File): Boolean {
-        // 软链指向的目标可能随升级变化，这里只检查链接本身是否存在且非空。
-        return runCatching { target.exists() && target.length() >= 0 }.getOrDefault(false)
+    /**
+     * proot 依赖 nativeLibraryDir 里的 .so 具备可执行位。
+     * 个别 ROM 会把 lib 装成 0644，此时容器会以 Permission denied 失败——
+     * 提前把结论写进日志，比让用户猜"为什么起不来"有用得多。
+     */
+    private fun diagnoseExecutable(source: File) {
+        val executable = runCatching {
+            android.system.Os.access(source.absolutePath, android.system.OsConstants.X_OK)
+        }.getOrDefault(false)
+        if (!executable) {
+            AppLog.app("警告：${source.name} 缺少可执行权限，容器可能无法启动")
+        }
+    }
+
+    private fun needsLink(source: File, target: File): Boolean {
+        val targetPath = target.toPath()
+        val isLink = runCatching { java.nio.file.Files.isSymbolicLink(targetPath) }
+            .getOrDefault(false)
+        if (!isLink) return true
+
+        val currentPointer = runCatching { java.nio.file.Files.readSymbolicLink(targetPath).toString() }
+            .getOrNull() ?: return true
+        return currentPointer != source.absolutePath
     }
 
     private fun linkOrCopy(source: File, target: File) {

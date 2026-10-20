@@ -23,6 +23,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -46,10 +47,20 @@ class ContainerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIFICATION_ID, buildNotification("正在启动容器…"))
-        acquireWakeLock()
 
-        if (intent?.action == ACTION_START_CONTAINER) {
-            scope.launch { appContainer.controller.start() }
+        // 系统重启服务时 intent 为 null：只要用户没有主动停止（哨兵不存在），就恢复容器，
+        // 否则 START_STICKY 只是把空壳服务拉起来，机器人仍然是死的。
+        val shouldStart = intent?.action == ACTION_START_CONTAINER ||
+            (intent == null && !appContainer.paths.stopSentinel.exists() && appContainer.bootstrapper.isReady())
+
+        scope.launch {
+            val settings = appContainer.settings.settings.first()
+            if (settings.keepAwake) acquireWakeLock()
+            if (shouldStart) {
+                // 走 Service 启动时同样要应用用户配置的镜像源，否则会退回默认值
+                appContainer.controller.aptMirror = settings.aptMirror
+                appContainer.controller.start()
+            }
         }
         observeState()
         return START_STICKY
@@ -112,7 +123,7 @@ class ContainerService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AstrMobile · $status")
-            .setContentText("点按返回控制台；清除通知会停止服务")
+            .setContentText("点按返回控制台；机器人由 App 管理")
             .setSmallIcon(R.drawable.ic_stat_bot)
             .setContentIntent(contentIntent)
             .setOngoing(true)

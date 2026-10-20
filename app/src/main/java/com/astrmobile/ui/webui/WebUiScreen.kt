@@ -29,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +55,17 @@ fun WebUiScreen(
 
     BackHandler(enabled = canGoBack) {
         webViewRef?.goBack()
+    }
+
+    // WebView 不会随 Compose 页面自动释放，必须显式销毁，否则离开页面后音频/网络仍被占用
+    DisposableEffect(Unit) {
+        onDispose {
+            webViewRef?.let { view ->
+                runCatching { view.stopLoading() }
+                runCatching { view.destroy() }
+            }
+            webViewRef = null
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {

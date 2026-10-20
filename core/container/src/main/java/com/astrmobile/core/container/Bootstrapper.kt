@@ -27,7 +27,7 @@ class Bootstrapper(
     private val rootfsInstaller = RootfsInstaller(context, paths)
     private val binaryInstaller = BinaryInstaller(paths)
 
-    fun isReady(): Boolean = paths.isRootfsInstalled() && paths.isToolchainReady() && paths.isBootstrapFinished()
+    fun isReady(): Boolean = paths.isRootfsInstalled() && paths.isBootstrapFinished()
 
     /**
      * 执行完整安装。`onStage` 会在 IO 线程被频繁回调，UI 侧需自行切主线程。

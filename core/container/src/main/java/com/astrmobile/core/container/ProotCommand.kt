@@ -22,6 +22,7 @@ object ProotCommand {
         val command = mutableListOf(
             paths.prootBin.absolutePath,
             "-0",
+            "--kill-on-exit",
             "-r", paths.rootfsDir.absolutePath,
             "--link2symlink",
             "-b", "/dev",
