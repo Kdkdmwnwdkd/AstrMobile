@@ -72,6 +72,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun cancelInstall() {
+        bootstrapper.cancel()
+        _installLogs.value = (_installLogs.value + "[APP] 已请求取消安装").takeLast(400)
+    }
+
     fun startContainer() {
         val current = settings.value
         controller.aptMirror = current.aptMirror
