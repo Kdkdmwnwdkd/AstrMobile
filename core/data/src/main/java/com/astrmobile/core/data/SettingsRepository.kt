@@ -17,6 +17,8 @@ data class AppSettings(
     val autoStartOnBoot: Boolean = true,
     val keepAwake: Boolean = true,
     val napcatEnabled: Boolean = true,
+    /** AstrBot 后台密码。改过密码的人只需在人格页填一次，其余页面共用。 */
+    val astrBotPassword: String = "astrbot",
 ) {
     companion object {
         const val DEFAULT_APT_MIRROR = "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports"
@@ -36,6 +38,7 @@ class SettingsRepository(private val context: Context) {
         val autoStart = booleanPreferencesKey("auto_start")
         val keepAwake = booleanPreferencesKey("keep_awake")
         val napcatEnabled = booleanPreferencesKey("napcat_enabled")
+        val astrBotPassword = stringPreferencesKey("astrbot_password")
     }
 
     val settings: Flow<AppSettings> = context.settingsStore.data.map { prefs ->
@@ -46,6 +49,7 @@ class SettingsRepository(private val context: Context) {
             autoStartOnBoot = prefs[Keys.autoStart] ?: true,
             keepAwake = prefs[Keys.keepAwake] ?: true,
             napcatEnabled = prefs[Keys.napcatEnabled] ?: true,
+            astrBotPassword = prefs[Keys.astrBotPassword] ?: "astrbot",
         )
     }
 
@@ -60,4 +64,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setKeepAwake(value: Boolean) = context.settingsStore.edit { it[Keys.keepAwake] = value }
 
     suspend fun setNapcatEnabled(value: Boolean) = context.settingsStore.edit { it[Keys.napcatEnabled] = value }
+
+    suspend fun setAstrBotPassword(value: String) =
+        context.settingsStore.edit { it[Keys.astrBotPassword] = value }
 }
