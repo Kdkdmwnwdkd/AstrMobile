@@ -1,5 +1,7 @@
 package com.astrmobile.ui.onboarding
 
+import android.content.Context
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,12 +10,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,9 +38,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.astrmobile.MainViewModel
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.service.ContainerService
+import com.astrmobile.ui.components.KeyValueRow
 import com.astrmobile.ui.components.LogView
 import com.astrmobile.ui.components.SectionCard
 import com.astrmobile.ui.components.StatusDot
+import com.astrmobile.ui.components.copyLogsToClipboard
+import com.astrmobile.ui.components.shareLogFile
 
 @Composable
 fun OnboardingScreen(
@@ -41,6 +52,7 @@ fun OnboardingScreen(
 ) {
     val stage by viewModel.installStage.collectAsStateWithLifecycle()
     val logs by viewModel.installLogs.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -76,10 +88,14 @@ fun OnboardingScreen(
         Spacer(Modifier.height(24.dp))
 
         SectionCard(title = "将要完成的三件事") {
-            StepRow("01", "搭建 Ubuntu 容器环境", "约需 3-8 分钟，占用 400MB 空间")
+            StepRow("01", "搭建 Ubuntu 容器环境", "首次约 10-40 分钟，占用约 1.5GB 空间")
             StepRow("02", "安装 AstrBot 与 NapCat", "需要联网下载，慢时可切换镜像源")
             StepRow("03", "扫码登录 QQ 并配置模型", "在网页后台完成，App 内一键进入")
         }
+
+        Spacer(Modifier.height(14.dp))
+
+        DeviceCheckCard()
 
         Spacer(Modifier.height(16.dp))
 
@@ -115,7 +131,7 @@ fun OnboardingScreen(
                 }
 
                 Spacer(Modifier.height(12.dp))
-                LogView(lines = logs, modifier = Modifier.height(220.dp))
+                LogSection(lines = logs, context = context, height = 220)
                 Spacer(Modifier.height(10.dp))
                 Text(
                     text = "提示：安装期间请保持屏幕常亮并保持 App 在前台，避免系统中断下载。",
@@ -139,7 +155,7 @@ fun OnboardingScreen(
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                LogView(lines = logs, modifier = Modifier.height(200.dp))
+                LogSection(lines = logs, context = context, height = 200)
                 Spacer(Modifier.height(14.dp))
                 Button(
                     onClick = { viewModel.install() },
@@ -173,7 +189,6 @@ fun OnboardingScreen(
             }
 
             else -> {
-                val context = LocalContext.current
                 Button(
                     onClick = {
                         // 先拉起前台服务，保证安装期间不被系统回收
@@ -243,5 +258,67 @@ private fun StepRow(index: String, title: String, detail: String) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun DeviceCheckCard() {
+    val context = LocalContext.current
+    val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
+    val supported = abi == "arm64-v8a"
+    val freeGb = context.filesDir.usableSpace / (1024.0 * 1024 * 1024)
+
+    SectionCard(title = "设备检查") {
+        KeyValueRow("设备", "${Build.MANUFACTURER} ${Build.MODEL}")
+        KeyValueRow("系统", "Android ${Build.VERSION.RELEASE}（API ${Build.VERSION.SDK_INT}）")
+        KeyValueRow(
+            label = "架构",
+            value = abi,
+            valueColor = if (supported) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.error
+            },
+        )
+        KeyValueRow("可用空间", "%.1f GB".format(freeGb))
+
+        if (!supported) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "此设备架构不是 arm64-v8a，容器无法运行，请换用 arm64 手机。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LogSection(lines: List<String>, context: Context, height: Int = 220) {
+    SectionCard(
+        title = "安装日志（${lines.size} 行）",
+        trailing = {
+            Row {
+                IconButton(
+                    onClick = { copyLogsToClipboard(context, lines) },
+                    enabled = lines.isNotEmpty(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ContentCopy,
+                        contentDescription = "复制日志",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                IconButton(onClick = { shareLogFile(context) }) {
+                    Icon(
+                        imageVector = Icons.Rounded.Share,
+                        contentDescription = "导出日志",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        },
+    ) {
+        LogView(lines = lines, modifier = Modifier.height(height.dp))
     }
 }

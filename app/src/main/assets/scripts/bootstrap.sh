@@ -44,8 +44,12 @@ if ! getent hosts mirrors.tuna.tsinghua.edu.cn >/dev/null 2>&1 \
 fi
 
 # 核心依赖：这些失败就没法继续
+# g++ / python3-dev / libffi-dev 等是编译 Python 扩展必需的，
+# AstrBot 的部分依赖没有 arm64 预编译 wheel，缺了会在 pip 阶段直接失败
 CORE_PACKAGES="ca-certificates curl wget git unzip xz-utils procps tzdata \
-python3 python3-venv python3-pip xvfb xauth"
+python3 python3-venv python3-pip python3-dev \
+build-essential g++ pkg-config libffi-dev libssl-dev zlib1g-dev \
+xvfb xauth"
 
 if ! apt-get install -y --no-install-recommends $CORE_PACKAGES; then
   fail_hint "核心依赖安装失败，重试一次（可能是镜像瞬时错误）"
@@ -80,9 +84,16 @@ log "4/6 安装 AstrBot"
 if [ ! -x /opt/astrbot/bin/astrbot ]; then
   rm -rf /opt/astrbot
   uv venv /opt/astrbot --python /usr/bin/python3 || { echo "[bootstrap] 创建虚拟环境失败"; exit 15; }
-  uv pip install --python /opt/astrbot/bin/python astrbot \
-    || uv pip install --python /opt/astrbot/bin/python -i "$PIP_INDEX_URL" astrbot \
-    || { echo "[bootstrap] AstrBot 安装失败"; exit 16; }
+
+  if ! uv pip install --python /opt/astrbot/bin/python astrbot; then
+    echo "[bootstrap] uv 安装失败，改用 pip 重试"
+    /opt/astrbot/bin/python -m pip install --upgrade pip -i "$PIP_INDEX_URL" || true
+    if ! /opt/astrbot/bin/python -m pip install astrbot -i "$PIP_INDEX_URL"; then
+      echo "[bootstrap] AstrBot 安装失败。常见原因：网络不可达、PyPI 镜像不可用、依赖编译失败"
+      echo "[bootstrap] 可到设置里换 PyPI 镜像后重试；若日志出现 gcc/error，请把上面几十行发回"
+      exit 16
+    fi
+  fi
 fi
 ln -sf /opt/astrbot/bin/astrbot /usr/local/bin/astrbot
 

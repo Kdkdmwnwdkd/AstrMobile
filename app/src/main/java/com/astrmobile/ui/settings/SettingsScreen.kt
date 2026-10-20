@@ -153,6 +153,31 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
         Spacer(Modifier.height(14.dp))
 
+        SectionCard(title = "常见问题") {
+            FaqItem(
+                "安装卡在某个步骤",
+                "点控制台右上角「复制」或「导出」把日志发出来。安装是可断点重试的：已解压的环境不会重复下载。",
+            )
+            FaqItem(
+                "apt 或 pip 下载很慢",
+                "到上面「下载源」换成更近的镜像（如中科大、阿里云），保存后重新安装。",
+            )
+            FaqItem(
+                "NapCat 安装失败",
+                "AstrBot 本身仍可正常使用，只是 QQ 接不进来。可先完成模型配置，稍后重试安装。",
+            )
+            FaqItem(
+                "息屏后机器人掉线",
+                "设置里保持「保持唤醒」开启，并在系统设置中允许本应用后台运行、关闭电池优化。",
+            )
+            FaqItem(
+                "QQ 账号被风控",
+                "个人号接入属于非官方协议，建议使用小号，避免高频发言。",
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
         SectionCard(title = "关于") {
             Text(
                 text = "AstrMobile ${com.astrmobile.BuildConfig.VERSION_NAME}",
@@ -225,5 +250,23 @@ private fun SettingSwitch(
         }
         Spacer(Modifier.width(12.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun FaqItem(question: String, answer: String) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Text(
+            text = question,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = answer,
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 18.sp,
+        )
     }
 }

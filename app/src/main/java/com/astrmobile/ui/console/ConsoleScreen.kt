@@ -1,7 +1,5 @@
 package com.astrmobile.ui.console
 
-import android.content.Context
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Icon
@@ -23,11 +22,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.astrmobile.MainViewModel
 import com.astrmobile.ui.components.LogView
-import java.io.File
+import com.astrmobile.ui.components.copyLogsToClipboard
+import com.astrmobile.ui.components.shareLogFile
 
 @Composable
 fun ConsoleScreen(viewModel: MainViewModel, onBack: () -> Unit) {
@@ -57,7 +56,10 @@ fun ConsoleScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = FontFamily.Monospace,
             )
-            IconButton(onClick = { shareLogs(context) }) {
+            IconButton(onClick = { copyLogsToClipboard(context, logs) }) {
+                Icon(Icons.Rounded.ContentCopy, contentDescription = "复制日志")
+            }
+            IconButton(onClick = { shareLogFile(context) }) {
                 Icon(Icons.Rounded.Share, contentDescription = "导出日志")
             }
             IconButton(onClick = { viewModel.clearLogs() }) {
@@ -78,26 +80,5 @@ fun ConsoleScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     .padding(bottom = 12.dp),
             )
         }
-    }
-}
-
-/** 通过系统分享面板把容器日志发出去，便于反馈排错。 */
-private fun shareLogs(context: Context) {
-    val logFile = File(context.filesDir, "runtime/logs/container.log")
-    if (!logFile.exists() || logFile.length() == 0L) return
-
-    runCatching {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            logFile,
-        )
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "AstrMobile 运行日志")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "导出日志"))
     }
 }
