@@ -60,7 +60,7 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
     LaunchedEffect(reloadKey) {
         loading = true
-        val cookie = viewModel.loginAstrBot("astrbot", "astrbot").getOrElse {
+        val cookie = viewModel.loginAstrBot().getOrElse {
             message = "${it.message}（可先在「人格设定」页填入改过的后台密码）"
             loading = false
             return@LaunchedEffect
