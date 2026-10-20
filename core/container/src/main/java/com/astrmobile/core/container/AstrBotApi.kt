@@ -120,6 +120,152 @@ class AstrBotApi(private val port: Int = 6185) {
         Result.success(Unit)
     }
 
+    // ---------------------------------------------------------------- 插件配置
+
+    /**
+     * 读某个插件的配置项与当前值。
+     *
+     * 返回结构（config_service.get_plugin_config）：
+     * `{metadata: {<plugin_id>: {items: schema}}, config: {...}}`
+     * schema 每项形如 `{type, description, hint, default, options, slider}`。
+     */
+    suspend fun getPluginConfig(
+        cookie: String,
+        pluginId: String,
+    ): Result<PluginConfigSnapshot> = withContext(Dispatchers.IO) {
+        val encoded = java.net.URLEncoder.encode(pluginId, "UTF-8")
+        val response = request("GET", "/plugins/config?plugin_id=$encoded", null, cookie)
+            ?: return@withContext Result.failure(IllegalStateException("读取配置失败：无响应"))
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "读取配置失败" }),
+            )
+        }
+
+        val root = response.body ?: return@withContext Result.failure(
+            IllegalStateException("配置返回为空"),
+        )
+        val schema = root.optJSONObject("metadata")
+            ?.optJSONObject(pluginId)
+            ?.optJSONObject("items")
+        val current = root.optJSONObject("config")
+
+        if (schema == null) {
+            return@withContext Result.failure(
+                IllegalStateException("这个插件没有可配置项（可能没提供配置结构）"),
+            )
+        }
+
+        Result.success(
+            PluginConfigSnapshot(
+                pluginId = pluginId,
+                items = parseSchema(schema, current),
+            ),
+        )
+    }
+
+    /** 保存插件配置。服务端要求 `{plugin_id, config}`。 */
+    suspend fun savePluginConfig(
+        cookie: String,
+        pluginId: String,
+        config: Map<String, Any?>,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        fun toJson(value: Any?): Any = when (value) {
+            null -> JSONObject.NULL
+            is List<*> -> JSONArray().apply { value.forEach { put(toJson(it)) } }
+            is Array<*> -> JSONArray().apply { value.forEach { put(toJson(it)) } }
+            else -> value
+        }
+
+        val configJson = JSONObject()
+        config.forEach { (key, value) ->
+            val jsonValue = toJson(value)
+            // 嵌套分组用 `group.key` 表达，这里拆回对象
+            if (key.contains('.')) {
+                val (group, child) = key.split('.', limit = 2)
+                val groupObj = configJson.optJSONObject(group) ?: JSONObject()
+                groupObj.put(child, jsonValue)
+                configJson.put(group, groupObj)
+            } else {
+                configJson.put(key, jsonValue)
+            }
+        }
+
+        val body = JSONObject()
+            .put("plugin_id", pluginId)
+            .put("config", configJson)
+            .toString()
+
+        val response = request("PUT", "/plugins/config", body, cookie)
+            ?: return@withContext Result.failure(IllegalStateException("保存失败：无响应"))
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "保存失败" }),
+            )
+        }
+        Result.success(Unit)
+    }
+
+    /** 把 schema 与当前值摊平成可渲染的列表；嵌套对象展开成 `group.key`。 */
+    private fun parseSchema(schema: JSONObject, current: JSONObject?): List<PluginConfigItem> {
+        val items = mutableListOf<PluginConfigItem>()
+
+        fun readValue(key: String, source: JSONObject?): Any? {
+            if (source == null) return null
+            if (!key.contains('.')) {
+                return if (source.has(key)) source.opt(key) else null
+            }
+            val (group, child) = key.split('.', limit = 2)
+            return source.optJSONObject(group)?.let { readValue(child, it) }
+        }
+
+        fun walk(prefix: String, node: JSONObject) {
+            node.keys().forEach { rawKey ->
+                val spec = node.optJSONObject(rawKey) ?: return@forEach
+                val key = if (prefix.isEmpty()) rawKey else "$prefix.$rawKey"
+                val type = spec.optString("type").ifBlank { "string" }
+
+                if (type == "object") {
+                    spec.optJSONObject("items")?.let { walk(key, it) }
+                    return@forEach
+                }
+
+                val options = mutableListOf<String>()
+                spec.optJSONArray("options")?.let { array ->
+                    for (i in 0 until array.length()) {
+                        val option = array.opt(i)
+                        // options 可能是字符串，也可能是 {label, value}
+                        if (option is JSONObject) {
+                            options += option.optString("value").ifBlank {
+                                option.optString("label")
+                            }
+                        } else {
+                            options += option.toString()
+                        }
+                    }
+                }
+
+                val slider = spec.optJSONObject("slider")
+                items += PluginConfigItem(
+                    key = key,
+                    label = spec.optString("description").ifBlank { rawKey },
+                    hint = spec.optString("hint"),
+                    type = type,
+                    value = readValue(key, current) ?: spec.opt("default"),
+                    options = options,
+                    min = slider?.optInt("min"),
+                    max = slider?.optInt("max"),
+                    step = slider?.optInt("step"),
+                )
+            }
+        }
+
+        walk("", schema)
+        return items
+    }
+
     // ---------------------------------------------------------------- 传输
 
     private class ApiResponse(
@@ -193,3 +339,22 @@ class AstrBotApi(private val port: Int = 6185) {
         }
     }
 }
+
+/** 插件配置里的一个可编辑项。 */
+data class PluginConfigItem(
+    val key: String,
+    val label: String,
+    val hint: String,
+    val type: String,
+    val value: Any?,
+    val options: List<String> = emptyList(),
+    val min: Int? = null,
+    val max: Int? = null,
+    val step: Int? = null,
+)
+
+/** 一次读取的结果。 */
+data class PluginConfigSnapshot(
+    val pluginId: String,
+    val items: List<PluginConfigItem>,
+)
