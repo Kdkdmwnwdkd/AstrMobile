@@ -33,7 +33,7 @@ fun LogView(
 ) {
     val listState = rememberLazyListState()
 
-    LaunchedEffect(lines.size, autoScroll) {
+    LaunchedEffect(lines.size, lines.lastOrNull(), autoScroll) {
         if (autoScroll && lines.isNotEmpty()) {
             listState.animateScrollToItem(lines.lastIndex)
         }

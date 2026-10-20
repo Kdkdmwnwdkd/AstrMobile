@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,6 +56,25 @@ class ContainerController(
     private var restartAttempts = 0
     private var userStopRequested = false
     private var restartJob: Job? = null
+
+    /** 日志写盘走单消费者，避免每个调用方都同步 open/close 文件。 */
+    private val logQueue = Channel<String>(Channel.UNLIMITED)
+    private var lastPublishAt = 0L
+
+    init {
+        scope.launch(Dispatchers.IO) {
+            for (line in logQueue) {
+                runCatching {
+                    paths.logDir.mkdirs()
+                    // 简单的体积上限：超过 8MB 清空，避免长期运行无限增长
+                    if (paths.containerLog.length() > 8L * 1024 * 1024) {
+                        paths.containerLog.writeText("")
+                    }
+                    paths.containerLog.appendText(line + "\n")
+                }
+            }
+        }
+    }
 
     fun refreshInstallState() {
         _state.value = when {
@@ -143,12 +163,18 @@ class ContainerController(
                 waitForExit(current, timeoutMs = 3_000)
             }
 
-            cleanupAfterExit()
+            cleanupAfterExit(current)
         }
     }
 
     /** 杀掉上次遗留的进程（App 被系统杀死后常见）。 */
     suspend fun killStaleProcess() {
+        // 容器正在启动/运行时不清理，避免误杀本次拉起的进程
+        val currentState = _state.value
+        if (currentState is ContainerState.Starting || currentState is ContainerState.Running) {
+            return
+        }
+
         val pid = runCatching { paths.pidFile.readText().trim().toLong() }.getOrNull() ?: return
         if (pid <= 0) {
             runCatching { paths.pidFile.delete() }
@@ -253,7 +279,7 @@ class ContainerController(
                     )
                 }
             }
-            cleanupAfterExit()
+            cleanupAfterExit(target)
         }
     }
 
@@ -326,15 +352,21 @@ class ContainerController(
 
     private fun appendLog(line: String) {
         buffer.add(line)
-        _logs.value = buffer.snapshot()
-        runCatching {
-            paths.logDir.mkdirs()
-            if (paths.containerLog.length() > 8L * 1024 * 1024) {
-                paths.containerLog.writeText("")
-            }
-            paths.containerLog.appendText(line + "\n")
+        logQueue.trySend(line)
+
+        // 日志流做 120ms 节流：apt/dpkg 每秒数百行时，避免每行都复制 3000 项列表并触发一次重组
+        val now = System.currentTimeMillis()
+        if (now - lastPublishAt >= 120L) {
+            lastPublishAt = now
+            _logs.value = buffer.snapshot()
         }
         logSink(line)
+    }
+
+    /** 日志停止输出时补一次发布，保证最后几行不会滞留在缓冲区里。 */
+    private fun flushLogs() {
+        lastPublishAt = 0L
+        _logs.value = buffer.snapshot()
     }
 
     private fun waitForExit(target: Process, timeoutMs: Long): Boolean {
@@ -346,16 +378,25 @@ class ContainerController(
         return !target.isAlive
     }
 
-    private fun cleanupAfterExit() {
+    private fun cleanupAfterExit(target: Process? = null) {
+        // 只有"当前进程"退出才清理状态。否则停止后立刻重启时，
+        // 旧进程的 finally 会把新进程的 healthJob / pidFile / 状态一起清掉。
+        if (target != null && process !== target) return
+
         healthJob?.cancel()
         healthJob = null
         process = null
         pumpJob = null
         runCatching { paths.pidFile.delete() }
+
         val current = _state.value
-        if (current is ContainerState.Starting || current is ContainerState.Running) {
+        if (current is ContainerState.Starting ||
+            current is ContainerState.Running ||
+            current is ContainerState.Stopping
+        ) {
             _state.value = ContainerState.Stopped
         }
+        flushLogs()
     }
 
     private fun currentTimezone(): String = runCatching {

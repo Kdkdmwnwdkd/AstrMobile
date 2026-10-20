@@ -78,6 +78,12 @@ class ContainerService : Service() {
     private fun observeState() {
         observeJob?.cancel()
         observeJob = scope.launch {
+            // 同时跟随"保持唤醒"开关：用户关掉后要真正释放已有的 WakeLock
+            launch {
+                appContainer.settings.settings.collectLatest { settings ->
+                    if (settings.keepAwake) acquireWakeLock() else releaseWakeLock()
+                }
+            }
             appContainer.controller.state.collectLatest { state ->
                 val text = when (state) {
                     is ContainerState.NotInstalled -> "环境未安装"

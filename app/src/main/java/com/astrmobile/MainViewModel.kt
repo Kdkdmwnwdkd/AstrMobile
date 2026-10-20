@@ -6,12 +6,15 @@ import androidx.lifecycle.viewModelScope
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.data.AppSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -114,10 +117,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun resetEnvironment() {
         viewModelScope.launch {
             runCatching { controller.stop() }
-            val paths = appContainer.paths
-            runCatching { paths.rootfsDir.deleteRecursively() }
-            runCatching { paths.installStateFile.delete() }
-            runCatching { paths.containerLog.writeText("") }
+            withContext(Dispatchers.IO) {
+                val paths = appContainer.paths
+                // 先删标记：即使删除中途被中断，下次也能重新安装而不是被判为"已安装"
+                runCatching { paths.installStateFile.delete() }
+                runCatching { File(paths.rootfsDir, ".rootfs-installed").delete() }
+                runCatching { paths.rootfsDir.deleteRecursively() }
+                runCatching { paths.containerLog.writeText("") }
+            }
             _installStage.value = Bootstrapper.Stage.Idle
             _installLogs.value = emptyList()
             _environmentReady.value = false

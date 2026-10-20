@@ -2,6 +2,7 @@ package com.astrmobile.ui.webui
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -154,6 +155,16 @@ fun WebUiScreen(
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 loading = false
                                 canGoBack = view?.canGoBack() == true
+                            }
+
+                            override fun onReceivedError(
+                                view: WebView?,
+                                request: WebResourceRequest?,
+                                error: WebResourceError?,
+                            ) {
+                                // 容器尚未启动时连接会被拒绝，onPageFinished 不会回调，
+                                // 不处理会让顶部一直显示"正在连接"。
+                                if (request?.isForMainFrame == true) loading = false
                             }
 
                             override fun shouldOverrideUrlLoading(
