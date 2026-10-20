@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Person
@@ -71,6 +72,7 @@ fun DashboardScreen(
     onOpenPlugins: () -> Unit,
     onOpenPersona: () -> Unit,
     onOpenKnowledge: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -300,6 +302,12 @@ fun DashboardScreen(
         SectionCard(title = "快捷入口") {
             val running = state as? ContainerState.Running
 
+            QuickEntry(
+                icon = Icons.Rounded.HealthAndSafety,
+                title = "自检",
+                detail = "一眼看出哪步没通、该怎么修",
+                onClick = onOpenDiagnostics,
+            )
             QuickEntry(
                 icon = Icons.Rounded.SmartToy,
                 title = "对话模型",
