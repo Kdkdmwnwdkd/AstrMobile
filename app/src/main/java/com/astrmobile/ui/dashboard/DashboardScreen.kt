@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.HealthAndSafety
@@ -75,6 +76,7 @@ fun DashboardScreen(
     onOpenKnowledge: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenBackup: () -> Unit,
+    onOpenConversations: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -363,6 +365,12 @@ fun DashboardScreen(
                         Toast.makeText(context, "NapCat 还在启动，请稍等", Toast.LENGTH_SHORT).show()
                     }
                 },
+            )
+            QuickEntry(
+                icon = Icons.Rounded.ChatBubbleOutline,
+                title = "对话记录",
+                detail = "看它到底回没回、回了什么",
+                onClick = onOpenConversations,
             )
             QuickEntry(
                 icon = Icons.Rounded.Terminal,
