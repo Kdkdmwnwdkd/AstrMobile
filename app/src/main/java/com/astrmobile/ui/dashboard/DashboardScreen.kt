@@ -1,6 +1,7 @@
 package com.astrmobile.ui.dashboard
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -250,19 +251,69 @@ fun DashboardScreen(
 
         Spacer(Modifier.height(14.dp))
 
+        // ---------------------------------------------------------- NapCat Token
+        val napcatToken by produceState<String?>(null, state) {
+            value = viewModel.readNapCatToken()
+        }
+        napcatToken?.let { token ->
+            Spacer(Modifier.height(14.dp))
+            SectionCard(
+                title = "NapCat 控制台 Token",
+                trailing = {
+                    TextButton(
+                        onClick = { copyText(context, "NapCat Token", token) },
+                    ) {
+                        Text("复制", style = MaterialTheme.typography.labelSmall)
+                    }
+                },
+            ) {
+                Text(
+                    text = token,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 16.sp,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "打开 NapCat 页后，先把它填进 Token 框登录，再在「账号」里扫码；" +
+                        "如果这里没显示，说明 Token 还没生成，等容器跑满 1 分钟再看。",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 17.sp,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
         // ---------------------------------------------------------- 快捷入口
         SectionCard(title = "快捷入口") {
+            val running = state as? ContainerState.Running
+
             QuickEntry(
                 icon = Icons.Rounded.Language,
                 title = "AstrBot 网页后台",
                 detail = "填模型 API Key、装插件、设人格，全在这里",
-                onClick = { onOpenWeb(6185) },
+                onClick = {
+                    if (running?.astrbotReady == true) {
+                        onOpenWeb(6185)
+                    } else {
+                        Toast.makeText(context, "AstrBot 还在启动，请等状态变成「已就绪」", Toast.LENGTH_SHORT).show()
+                    }
+                },
             )
             QuickEntry(
                 icon = Icons.Rounded.QrCodeScanner,
                 title = "NapCat 扫码登录",
-                detail = "用手机 QQ 扫码，把账号接入机器人",
-                onClick = { onOpenWeb(6099) },
+                detail = "先填 Token 登录，再在「账号」里扫码",
+                onClick = {
+                    if (running?.napcatReady == true) {
+                        onOpenWeb(6099)
+                    } else {
+                        Toast.makeText(context, "NapCat 还在启动，请稍等", Toast.LENGTH_SHORT).show()
+                    }
+                },
             )
             QuickEntry(
                 icon = Icons.Rounded.Terminal,
