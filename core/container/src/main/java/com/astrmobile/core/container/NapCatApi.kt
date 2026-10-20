@@ -9,6 +9,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 
 data class QqLoginStatus(
     val isLogin: Boolean,
@@ -30,11 +31,26 @@ data class QqLoginStatus(
  */
 class NapCatApi(private val port: Int = 6099) {
 
+    companion object {
+        /**
+         * start.sh 会以 `NAPCAT_WEBUI_SECRET_KEY` 把 WebUI 口令固定成这个值。
+         * NapCat 默认会在首次启动时把口令随机化、且只在 QQ 登录成功后才告知，
+         * App 若不固定就永远登录不进它的本地接口。
+         */
+        const val DEFAULT_TOKEN = "astrmobile"
+    }
+
     private val baseUrl = "http://127.0.0.1:$port"
 
-    /** 登录 WebUI，返回后续请求要带的 Credential。 */
+    /**
+     * 登录 WebUI，返回后续请求要带的 Credential。
+     *
+     * 注意：接口收的不是 token 原文，而是 `sha256(token + ".napcat")` 的十六进制串
+     * （见 napcat-webui-backend 的 AuthHelper.generatePasswordHash）。
+     * 直接把原文当 hash 传会一律返回 "token is invalid"。
+     */
     suspend fun login(token: String): Result<String> = withContext(Dispatchers.IO) {
-        val body = JSONObject().put("hash", token).toString()
+        val body = JSONObject().put("hash", tokenHash(token)).toString()
         val response = post("/api/auth/login", body, credential = null)
             ?: return@withContext Result.failure(IllegalStateException("NapCat 未响应，可能还没启动完成"))
 
@@ -45,6 +61,13 @@ class NapCatApi(private val port: Int = 6099) {
         }
         Result.success(credential)
     }
+
+    /** NapCat 的口令散列：sha256(token + ".napcat")。 */
+    fun tokenHash(token: String): String = runCatching {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest((token + ".napcat").toByteArray(Charsets.UTF_8))
+        digest.joinToString("") { byte -> "%02x".format(byte) }
+    }.getOrDefault("")
 
     suspend fun fetchQrcode(credential: String): Result<String> = withContext(Dispatchers.IO) {
         val response = post("/api/QQLogin/GetQQLoginQrcode", "{}", credential)

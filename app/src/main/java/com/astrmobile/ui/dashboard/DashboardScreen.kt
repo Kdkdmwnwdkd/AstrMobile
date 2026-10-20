@@ -259,7 +259,7 @@ fun DashboardScreen(
         napcatToken?.let { token ->
             Spacer(Modifier.height(14.dp))
             SectionCard(
-                title = "NapCat 控制台 Token",
+                title = "NapCat 网页版口令（兜底用）",
                 trailing = {
                     TextButton(
                         onClick = { copyText(context, "NapCat Token", token) },
@@ -277,8 +277,8 @@ fun DashboardScreen(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "打开 NapCat 页后，先把它填进 Token 框登录，再在「账号」里扫码；" +
-                        "如果这里没显示，说明 Token 还没生成，等容器跑满 1 分钟再看。",
+                    text = "只有走网页版兜底时才需要它。App 里的「QQ 扫码登录」会自动用它，" +
+                        "你不用手动填。",
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 17.sp,

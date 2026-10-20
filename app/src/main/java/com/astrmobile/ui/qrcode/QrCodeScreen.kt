@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,7 +61,7 @@ fun QrCodeScreen(
     onBack: () -> Unit,
     onOpenWebFallback: () -> Unit,
 ) {
-    val token by produceState<String?>(null) { value = viewModel.readNapCatToken() }
+    val tokens by produceState<List<String>>(emptyList()) { value = viewModel.readNapCatTokens() }
 
     var qrcode by remember { mutableStateOf<Bitmap?>(null) }
     var statusText by remember { mutableStateOf("正在连接 NapCat…") }
@@ -68,9 +69,8 @@ fun QrCodeScreen(
     var isSuccess by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(token, reloadKey) {
-        val webuiToken = token
-        if (webuiToken.isNullOrBlank()) {
+    LaunchedEffect(tokens, reloadKey) {
+        if (tokens.isEmpty()) {
             statusText = "还没读到 NapCat 的 Token，请确认容器已启动并稍等 30 秒"
             isError = true
             return@LaunchedEffect
@@ -83,22 +83,46 @@ fun QrCodeScreen(
 
         val api = NapCatApi()
 
-        val credential = api.login(webuiToken).getOrElse { error ->
-            statusText = "连接 NapCat 失败：${error.message}"
+        // NapCat 的口令可能被随机化过，逐个候选尝试，避免一次失败就卡死。
+        var credential: String? = null
+        var lastError = ""
+        for (candidate in tokens) {
+            val result = api.login(candidate)
+            if (result.isSuccess) {
+                credential = result.getOrNull()
+                break
+            }
+            lastError = result.exceptionOrNull()?.message.orEmpty()
+        }
+
+        if (credential.isNullOrBlank()) {
+            statusText = buildString {
+                append("登录 NapCat 失败：")
+                append(lastError.ifBlank { "口令不匹配" })
+                append("\n请点下方「重启机器人」后再进来；若仍失败，把这段发我。")
+            }
             isError = true
             return@LaunchedEffect
         }
 
         statusText = "正在获取二维码…"
         val rawQrcode = api.fetchQrcode(credential).getOrElse { error ->
-            statusText = "获取二维码失败：${error.message}"
-            isError = true
+            val message = error.message.orEmpty()
+            // 已经登录过时 NapCat 会直接拒绝发码，这不是故障。
+            if (message.contains("Is Logined", ignoreCase = true)) {
+                statusText = "这个 QQ 已经登录了，无需再扫码"
+                isSuccess = true
+            } else {
+                statusText = "获取二维码失败：$message"
+                isError = true
+            }
             return@LaunchedEffect
         }
 
         qrcode = QrCodeDecoder.decode(rawQrcode)
-        statusText = if (qrcode == null) "二维码解析失败" else "用手机 QQ 扫描上方二维码"
+        statusText = if (qrcode == null) "二维码解析失败，请点刷新重试" else "用手机 QQ 扫描上方二维码"
         isError = qrcode == null
+        if (qrcode == null) return@LaunchedEffect
 
         while (isActive) {
             val status = api.checkStatus(credential)
@@ -166,6 +190,22 @@ fun QrCodeScreen(
                     contentDescription = "QQ 登录二维码",
                     modifier = Modifier.size(260.dp),
                 )
+                isError -> Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ErrorOutline,
+                        contentDescription = null,
+                        tint = Color(0xFFB3261E),
+                        modifier = Modifier.size(56.dp),
+                    )
+                    Text(
+                        text = "没能拿到二维码",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFF5F6368),
+                    )
+                }
                 else -> CircularProgressIndicator(color = Color(0xFF167A57))
             }
         }

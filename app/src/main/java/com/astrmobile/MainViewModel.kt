@@ -7,6 +7,7 @@ import com.astrmobile.core.container.AstrBotConfigReader
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.container.DashboardCredentials
+import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
 import com.astrmobile.core.data.AppSettings
 import kotlinx.coroutines.Dispatchers
@@ -107,8 +108,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun readDashboardCredentials(): DashboardCredentials? =
         withContext(Dispatchers.IO) { AstrBotConfigReader.readDashboard(appContainer.paths) }
 
-    suspend fun readNapCatToken(): String? =
-        withContext(Dispatchers.IO) { NapCatConfigReader.readToken(appContainer.paths) }
+    /**
+     * NapCat 可能的口令，按可能性排序。
+     *
+     * 新版 start.sh 会把口令固定成 DEFAULT_TOKEN；旧容器里可能还留着
+     * NapCat 随机生成的 8 位口令，因此再从配置文件读一次做兜底。
+     */
+    suspend fun readNapCatTokens(): List<String> = withContext(Dispatchers.IO) {
+        val fromFile = runCatching { NapCatConfigReader.readToken(appContainer.paths) }.getOrNull()
+        listOfNotNull(NapCatApi.DEFAULT_TOKEN, fromFile?.takeIf { it.isNotBlank() }).distinct()
+    }
+
+    suspend fun readNapCatToken(): String? = readNapCatTokens().firstOrNull()
 
     fun prepareReinstall() {
         // 用户从控制台点"重新安装"时，环境通常仍不完整；把上一轮的 Done 状态清掉，
