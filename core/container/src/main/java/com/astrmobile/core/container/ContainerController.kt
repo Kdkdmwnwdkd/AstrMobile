@@ -29,6 +29,7 @@ import java.time.ZoneId
  * 保活由 Android 前台服务负责，UI 通过 StateFlow 订阅。
  */
 class ContainerController(
+    private val context: android.content.Context,
     private val paths: ContainerPaths,
     private val logSink: (String) -> Unit = {},
 ) {
@@ -110,6 +111,9 @@ class ContainerController(
 
                 if (paths.stopSentinel.exists()) paths.stopSentinel.delete()
                 prepareRootfsConfig()
+                // 每次启动都用 APK 里的最新脚本覆盖容器内版本，
+                // 避免"升级了 App 但容器还在跑旧脚本"
+                ScriptInjector.inject(context, paths)
                 appendLog(AppLog.container("启动容器：${paths.rootfsDir.absolutePath}"))
 
                 val argv = listOf("/bin/bash", "/root/start.sh")
