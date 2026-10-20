@@ -11,6 +11,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.astrmobile.MainViewModel
 import com.astrmobile.ui.console.ConsoleScreen
+import com.astrmobile.ui.conversations.ConversationsScreen
 import com.astrmobile.ui.dashboard.DashboardScreen
 import com.astrmobile.ui.models.ModelScreen
 import com.astrmobile.ui.backup.BackupScreen
@@ -36,6 +37,7 @@ object Routes {
     const val Knowledge = "knowledge"
     const val Diagnostics = "diagnostics"
     const val Backup = "backup"
+    const val Conversations = "conversations"
     const val PluginConfig = "pluginconfig/{pluginId}"
 
     fun pluginConfig(pluginId: String) = "pluginconfig/$pluginId"
@@ -98,6 +100,7 @@ fun AppNav(viewModel: MainViewModel) {
                 onOpenKnowledge = { navController.navigate(Routes.Knowledge) },
                 onOpenDiagnostics = { navController.navigate(Routes.Diagnostics) },
                 onOpenBackup = { navController.navigate(Routes.Backup) },
+                onOpenConversations = { navController.navigate(Routes.Conversations) },
                 onRepair = {
                     viewModel.prepareReinstall()
                     navController.navigate(Routes.Onboarding)
@@ -184,6 +187,13 @@ fun AppNav(viewModel: MainViewModel) {
 
         composable(Routes.Backup) {
             BackupScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.Conversations) {
+            ConversationsScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
             )
