@@ -106,6 +106,18 @@ fun WebUiScreen(
             }
         }
 
+        // NapCat WebUI 需要 token，默认随机生成并打印在容器日志里。
+        // 不提示的话用户会卡在登录页不知道该填什么。
+        if (currentPort == napcatPort) {
+            Text(
+                text = "首次登录需 Token：在「实时日志」里搜索 webui 或 token",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            )
+        }
+
         Column(modifier = Modifier.fillMaxWidth()) {
             if (loading) {
                 Row(

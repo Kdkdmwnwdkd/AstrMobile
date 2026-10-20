@@ -64,6 +64,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // 同时并入容器日志：安装失败时用户导出的就是这一份完整现场
                     controller.pushLog(line)
                 },
+                aptMirror = current.aptMirror,
                 pipIndex = current.pipIndex,
                 githubProxy = current.githubProxy,
             )

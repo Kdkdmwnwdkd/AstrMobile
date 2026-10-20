@@ -48,7 +48,7 @@ class ContainerController(
     private var healthJob: Job? = null
 
     /** 由 UI 在启动前注入的 apt 镜像，默认清华 ubuntu-ports。 */
-    var aptMirror: String = "http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports"
+    var aptMirror: String = RootfsConfigurator.DEFAULT_APT_MIRROR
 
     /** 异常退出后是否自动重启。开启后息屏被系统杀掉也能自愈。 */
     var autoRestartEnabled: Boolean = true
@@ -214,45 +214,7 @@ class ContainerController(
     }
 
     private fun prepareRootfsConfig() {
-        val etc = File(paths.rootfsDir, "etc")
-        etc.mkdirs()
-        File(etc, "resolv.conf").writeText(
-            """
-            nameserver 223.5.5.5
-            nameserver 119.29.29.29
-            nameserver 8.8.8.8
-            """.trimIndent() + "\n",
-        )
-        File(etc, "hostname").writeText("astrmobile\n")
-        File(etc, "hosts").writeText(
-            """
-            127.0.0.1 localhost astrmobile
-            ::1 localhost
-            """.trimIndent() + "\n",
-        )
-        File(etc, "apt").mkdirs()
-        File(etc, "apt/sources.list").writeText(
-            """
-            deb [trusted=yes] $aptMirror noble main restricted universe multiverse
-            deb [trusted=yes] $aptMirror noble-updates main restricted universe multiverse
-            deb [trusted=yes] $aptMirror noble-security main restricted universe multiverse
-            deb [trusted=yes] $aptMirror noble-backports main restricted universe multiverse
-            """.trimIndent() + "\n",
-        )
-        File(etc, "apt/sources.list.d").mkdirs()
-        runCatching {
-            File(etc, "apt/apt.conf.d").mkdirs()
-            File(etc, "apt/apt.conf.d/99astrmobile").writeText(
-                """
-                Acquire::Retries "3";
-                Acquire::http::Timeout "30";
-                Acquire::https::Timeout "30";
-                Acquire::Languages "none";
-                APT::Sandbox::User "root";
-                APT::Get::AllowUnauthenticated "true";
-                """.trimIndent() + "\n",
-            )
-        }
+        RootfsConfigurator.apply(paths, aptMirror)
     }
 
     private fun pumpOutput(target: Process) {

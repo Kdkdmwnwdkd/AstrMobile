@@ -56,6 +56,11 @@ class RootfsInstaller(
                 val totalBytes = runCatching { context.assets.openFd(ASSET_PATH).use { it.length } }
                     .getOrDefault(0L)
 
+                // 上次解压中断可能留下半成品（例如 bin 已是实体目录而非符号链接），
+                // 直接覆盖会因 EEXIST 静默失败，导致 bin/bash 永远缺失。先清干净。
+                if (paths.rootfsDir.exists()) {
+                    paths.rootfsDir.deleteRecursively()
+                }
                 paths.rootfsDir.mkdirs()
                 onProgress(0f, "准备解压 rootfs")
 

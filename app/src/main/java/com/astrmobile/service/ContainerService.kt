@@ -16,6 +16,7 @@ import com.astrmobile.AstrMobileApp
 import com.astrmobile.MainActivity
 import com.astrmobile.R
 import com.astrmobile.core.container.ContainerState
+import com.astrmobile.core.data.AppSettings
 import com.astrmobile.di.AppContainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +55,9 @@ class ContainerService : Service() {
             (intent == null && !appContainer.paths.stopSentinel.exists() && appContainer.bootstrapper.isReady())
 
         scope.launch {
-            val settings = appContainer.settings.settings.first()
+            // DataStore 读取失败不应该让整个服务起不来，退回默认配置继续启动
+            val settings = runCatching { appContainer.settings.settings.first() }
+                .getOrElse { AppSettings() }
             if (settings.keepAwake) acquireWakeLock()
             if (shouldStart) {
                 // 走 Service 启动时同样要应用用户配置的镜像源，否则会退回默认值

@@ -36,20 +36,32 @@ fi
 
 # ---------------------------------------------------------------- 2. 依赖
 log "2/6 安装系统依赖"
-APT_PACKAGES="ca-certificates curl wget git unzip xz-utils procps tzdata \
-python3 python3-venv python3-pip \
-xvfb xauth libgl1 libglib2.0-0 libnss3 libnspr4 libasound2t64 libgbm1 \
-libxss1 libxtst6 fonts-noto-cjk"
 
-if ! apt-get install -y --no-install-recommends $APT_PACKAGES; then
-  fail_hint "依赖安装失败，重试一次（可能是镜像瞬时错误）"
-  apt-get update -y || true
-  apt-get install -y --no-install-recommends $APT_PACKAGES || { echo "[bootstrap] 系统依赖安装失败"; exit 12; }
+# 先确认 DNS 可用，避免把 DNS 问题误判成"源不可用"
+if ! getent hosts mirrors.tuna.tsinghua.edu.cn >/dev/null 2>&1 \
+   && ! getent hosts archive.ubuntu.com >/dev/null 2>&1; then
+  echo "[bootstrap] 警告：域名解析失败，请检查 /etc/resolv.conf 或网络"
 fi
 
-# 部分镜像的包名差异（Ubuntu 22.04 为 libasound2）
-if ! dpkg -s libasound2t64 >/dev/null 2>&1; then
-  apt-get install -y --no-install-recommends libasound2 || true
+# 核心依赖：这些失败就没法继续
+CORE_PACKAGES="ca-certificates curl wget git unzip xz-utils procps tzdata \
+python3 python3-venv python3-pip xvfb xauth"
+
+if ! apt-get install -y --no-install-recommends $CORE_PACKAGES; then
+  fail_hint "核心依赖安装失败，重试一次（可能是镜像瞬时错误）"
+  apt-get update -y || true
+  apt-get install -y --no-install-recommends $CORE_PACKAGES || { echo "[bootstrap] 核心依赖安装失败"; exit 12; }
+fi
+
+# GUI 依赖：只影响 QQ（Electron），失败不应阻断 AstrBot
+# Ubuntu 24.04 对部分库做了 t64 改名，两套包名都试一次
+GUI_PACKAGES_T64="libgl1 libglib2.0-0t64 libnss3 libnspr4 libasound2t64 libgbm1 libxss1 libxtst6 fonts-noto-cjk"
+GUI_PACKAGES_LEGACY="libgl1 libglib2.0-0 libnss3 libnspr4 libasound2 libgbm1 libxss1 libxtst6 fonts-noto-cjk"
+
+if ! apt-get install -y --no-install-recommends $GUI_PACKAGES_T64; then
+  echo "[bootstrap] t64 包名安装失败，回退旧包名"
+  apt-get install -y --no-install-recommends $GUI_PACKAGES_LEGACY \
+    || echo "[bootstrap] GUI 依赖安装失败，QQ 可能无法启动（AstrBot 不受影响）"
 fi
 
 # ---------------------------------------------------------------- 3. uv

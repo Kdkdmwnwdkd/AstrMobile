@@ -32,6 +32,7 @@ class Bootstrapper(
     suspend fun install(
         onStage: suspend (Stage) -> Unit,
         onLine: suspend (String) -> Unit,
+        aptMirror: String = RootfsConfigurator.DEFAULT_APT_MIRROR,
         pipIndex: String = "https://pypi.tuna.tsinghua.edu.cn/simple",
         githubProxy: String = "https://ghfast.top/",
     ): Result<Unit> = withContext(Dispatchers.IO) {
@@ -53,8 +54,11 @@ class Bootstrapper(
                 onStage(Stage.Running("解压系统环境", 0.35f, "已存在，跳过"))
             }
 
-            onStage(Stage.Running("注入启动脚本", 0.37f, "写入 bootstrap / start"))
+            onStage(Stage.Running("注入启动脚本", 0.37f, "写入网络与 apt 源配置"))
             injectScripts()
+            // 必须在跑 bootstrap 之前写好：自带 resolv.conf 指向 127.0.0.53，
+            // 容器里没有 systemd-resolved，不覆盖就会 DNS 解析失败、apt 全面超时。
+            RootfsConfigurator.apply(paths, aptMirror)
 
             onStage(Stage.Running("安装 AstrBot 与 NapCat", 0.40f, "需要联网，可能耗时较久"))
             val exitCode = runBootstrap(

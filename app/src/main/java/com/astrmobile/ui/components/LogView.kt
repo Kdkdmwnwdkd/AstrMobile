@@ -35,7 +35,8 @@ fun LogView(
 
     LaunchedEffect(lines.size, lines.lastOrNull(), autoScroll) {
         if (autoScroll && lines.isNotEmpty()) {
-            listState.animateScrollToItem(lines.lastIndex)
+            // 用无动画滚动：日志高频追加时，动画会排队堆积导致明显卡顿
+            listState.scrollToItem(lines.lastIndex)
         }
     }
 

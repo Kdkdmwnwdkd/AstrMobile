@@ -61,6 +61,7 @@ fun AppNav(viewModel: MainViewModel) {
                 onFinished = {
                     navController.navigate(Routes.Home) {
                         popUpTo(Routes.Onboarding) { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
             )
