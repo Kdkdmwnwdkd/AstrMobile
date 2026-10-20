@@ -36,6 +36,30 @@ AstrMobile 是一个 **Android 端的 AstrBot 启动器**：
 
 **不是**一个精简版聊天壳：容器里跑的是与电脑上完全相同的 AstrBot。
 
+## 功能
+
+App 内可以直接完成的事（不用进网页后台）：
+
+| 模块 | 能力 |
+|---|---|
+| **自检** | 逐项检查环境、容器与端口、对话模型、QQ 登录态、插件、消息通道，每项不合格都给出具体动作 |
+| **对话模型** | DeepSeek / OpenAI / 智谱 / 通义 / Kimi 预设，贴 Key 即可；也支持自定义接口 |
+| **QQ 登录** | 二维码直接画在 App 里（调 NapCat 本地接口），不用进它的网页 |
+| **人格设定** | 改 system prompt，列出已有的人格 |
+| **插件市场** | 1329 个插件可搜可装（数据来自 AstrBot 官方公开索引），支持卸载 |
+| **插件参数** | 表单由插件的 `_conf_schema.json` 动态生成：开关、数字、文本、列表、选项 |
+| **知识库** | 配向量模型 → 建库 → 上传文档（txt/md/pdf/epub/docx）→ 自动切块索引 |
+| **对话记录** | 最近会话倒序，点开看完整问答（左右气泡） |
+| **备份与恢复** | 打包 `data` 目录导出到网盘；恢复失败自动回滚 |
+| **日志** | 容器实时日志、复制、导出文件 |
+
+自动化的部分（不需要手动配置）：
+
+- NapCat 的反向 WebSocket 指向 AstrBot（`ws://127.0.0.1:6199/ws`）
+- AstrBot 的 `aiocqhttp` 平台自动开启并监听 6199
+- NapCat 的 WebUI 口令与端口固定（否则会随机化，App 连不上）
+- AstrBot 后台口令在首次启动时设为 `astrbot`（否则会生成 24 位随机值）
+
 ## 与两个参考项目的关系
 
 本项目的技术选型直接来自对 [DSHA](https://github.com/DSH-APP/DSHA) 与 [ElymBot](https://github.com/undertaker33/ElymBot) 的对比分析：
@@ -51,21 +75,37 @@ AstrMobile 是一个 **Android 端的 AstrBot 启动器**：
 ```
 ┌──────────────────────────── Android App (Kotlin + Compose) ────────────────────────────┐
 │  MainActivity / Compose UI                                                             │
-│    ├── Onboarding  安装向导（进度 + 实时日志）                                          │
-│    ├── Dashboard   状态卡、启停、快捷入口                                               │
-│    ├── Console     容器实时日志                                                         │
-│    ├── WebUi       WebView 打开 AstrBot(6185) / NapCat(6099)                            │
-│    └── Settings    镜像源、开机自启、清除环境                                           │
+│    ├── Onboarding     安装向导（进度 + 实时日志）
+│    ├── Dashboard      状态卡、启停、功能入口
+│    ├── Diagnostics    六项自检（环境/容器/模型/QQ/插件/通道）
+│    ├── QrCode         原生 QQ 扫码（调 NapCat 本地接口）
+│    ├── Models         对话模型配置
+│    ├── Persona        人格设定（system prompt）
+│    ├── Plugins        插件市场 + 参数表单
+│    ├── Knowledge      知识库（向量模型 + 上传 + 索引）
+│    ├── Conversations  对话记录
+│    ├── Backup         备份与恢复
+│    ├── Console        容器实时日志
+│    ├── WebUi          WebView（兜底入口）
+│    └── Settings       镜像源、开机自启、清除环境
 │                                                                                        │
 │  ContainerService（前台服务 + WakeLock + 常驻通知）  ← 保证息屏不掉线                    │
 │                                                                                        │
-│  core:container                                                                        │
-│    ├── ContainerPaths     目录布局                                                      │
-│    ├── BinaryInstaller    nativeLibraryDir → bin 软链（绕过 W^X）                       │
-│    ├── RootfsInstaller    Java 解压 tar.xz（保留符号链接/权限，精确进度）                │
-│    ├── ProotCommand       proot 参数构造                                                │
-│    ├── ContainerController 状态机 / 启停 / 日志泵 / 端口探活                            │
-│    └── Bootstrapper       首次安装编排                                                  │
+│  core:container
+│    ├── ContainerPaths      目录布局
+│    ├── BinaryInstaller     nativeLibraryDir → bin 软链（绕过 W^X）
+│    ├── RootfsInstaller     解压 tar.xz → 定位真正的根目录（剥离顶层目录）
+│    ├── ProotCommand        proot 参数构造
+│    ├── ContainerController 状态机 / 启停 / 日志泵 / 端口探活 / 崩溃自愈
+│    ├── Bootstrapper        首次安装编排
+│    ├── ScriptInjector      每次启动覆盖容器内脚本（避免升级后仍跑旧脚本）
+│    ├── RootfsConfigurator  DNS / apt 源 / hosts
+│    ├── AstrBotApi          AstrBot REST（人格/插件参数/对话，HttpOnly Cookie）
+│    ├── ModelConfigRepository / KnowledgeBaseRepository
+│    ├── PluginRepository    市场索引 + zip 下载解压
+│    ├── BackupRepository    打包与恢复（失败回滚）
+│    ├── Diagnostics         自检
+│    └── NapCatApi / NapCatConfigReader / AstrBotConfigReader
 └────────────────────────────────────────────────────────────────────────────────────────┘
                                     │ proot
 ┌───────────────────────────────────▼────────────────────────────────────────────────────┐
@@ -93,13 +133,18 @@ export ANDROID_HOME=/path/to/android-sdk
 
 1. 安装 APK（arm64 设备，Android 8.0+），允许通知权限
 2. 打开 App → 「开始安装」，保持屏幕常亮，等待 5–20 分钟（取决于网络）
-3. 安装完成后进入控制台 → 「启动机器人」
-4. 等两个端口都显示「已就绪」
-5. 打开 **NapCat 扫码登录**，用手机 QQ 扫码
-6. 打开 **AstrBot 后台**（默认账号/密码均为 `astrbot`，务必修改）
-7. 「模型提供商」填入 API Key
-8. 「机器人 → 通信接口」新增 `aiocqhttp`，地址 `ws://127.0.0.1:6199/ws`
-9. 在群里 @机器人 即可对话
+3. 安装完成后进入控制台 →「启动机器人」，等容器状态变成运行中
+4. 点 **「自检」**，先确认链路。全绿再往下走，有红项按提示处理
+5. **「QQ 扫码登录」**→ 二维码直接显示在 App 里 → 手机 QQ 扫码
+6. **「对话模型」**→ 选厂商 → 贴 API Key → 保存 → 重启
+7. **「人格设定」**→ 写一句人设 → 保存 → 重启
+8. **「插件」**→ 搜「表情」「记忆」→ 装 1–2 个 → 重启
+9. 群里 @机器人 说话
+10. 回 App 看 **「对话记录」**，确认它真的回了
+
+建议在装完第 5 步后做一次 **「备份与恢复」→ 立即备份**，之后折腾坏了能回去。
+
+> 通信接口、端口、口令都已自动配置，不需要再进网页后台手动添加 `aiocqhttp`。
 
 ## 已知限制
 
