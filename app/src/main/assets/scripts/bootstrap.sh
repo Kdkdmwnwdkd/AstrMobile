@@ -142,8 +142,17 @@ fi
 # ---------------------------------------------------------------- 6. 初始化
 log "6/6 初始化 AstrBot 数据目录"
 cd /root || exit 17
+
+# astrbot init 在无 TTY 的环境里会等待输入而永久挂起（实测卡在 "Initializing AstrBot..."）。
+# 用 timeout + /dev/null 兜住：超时就放弃，astrbot run 首次启动会自动建数据目录。
 if [ ! -d /root/data ]; then
-  astrbot init || echo "[bootstrap] astrbot init 返回非零，首次启动时会自动重建"
+  echo "[bootstrap] 预初始化（最多 90 秒，超时不影响启动）"
+  if timeout 90 astrbot init </dev/null >/root/astrbot-init.log 2>&1; then
+    echo "[bootstrap] 预初始化完成"
+  else
+    echo "[bootstrap] 预初始化超时或跳过，首次启动会自动初始化"
+    tail -5 /root/astrbot-init.log 2>/dev/null || true
+  fi
 fi
 
 # 生成一份给用户看的下一步说明
