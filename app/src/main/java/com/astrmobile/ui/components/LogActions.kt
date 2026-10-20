@@ -44,3 +44,9 @@ fun shareLogFile(context: Context) {
         context.startActivity(Intent.createChooser(intent, "导出日志"))
     }
 }
+
+/** 复制任意文本（账号、密码、命令等）。 */
+fun copyText(context: Context, label: String, text: String) {
+    val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
+    clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+}

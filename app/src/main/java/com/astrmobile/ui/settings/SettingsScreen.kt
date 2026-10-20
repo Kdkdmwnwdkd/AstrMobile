@@ -1,5 +1,9 @@
 package com.astrmobile.ui.settings
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -131,6 +136,24 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 checked = settings.keepAwake,
                 onCheckedChange = { scope.launch { viewModel.setKeepAwake(it) } },
             )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        SectionCard(title = "后台保活") {
+            HintText(
+                "机器人要在息屏后继续工作，需要系统允许本应用后台运行。" +
+                    "点下面的按钮，把本应用加入电池优化白名单。",
+            )
+            Spacer(Modifier.height(12.dp))
+            val context = LocalContext.current
+            Button(
+                onClick = { requestIgnoreBatteryOptimization(context) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text("允许后台运行")
+            }
         }
 
         Spacer(Modifier.height(14.dp))
@@ -268,5 +291,18 @@ private fun FaqItem(question: String, answer: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 18.sp,
         )
+    }
+}
+
+/** 拉起系统的电池优化白名单页面；部分 ROM 不支持直达就退回到列表页。 */
+private fun requestIgnoreBatteryOptimization(context: Context) {
+    val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+        data = Uri.parse("package:${context.packageName}")
+    }
+    val launched = runCatching { context.startActivity(direct) }.isSuccess
+    if (!launched) {
+        runCatching {
+            context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        }
     }
 }

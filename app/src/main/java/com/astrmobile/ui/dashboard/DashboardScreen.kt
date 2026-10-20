@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,10 +47,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.astrmobile.MainViewModel
 import com.astrmobile.core.container.ContainerState
+import com.astrmobile.core.container.DashboardCredentials
 import com.astrmobile.service.ContainerService
 import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.KeyValueRow
 import com.astrmobile.ui.components.SectionCard
+import com.astrmobile.ui.components.copyText
 import com.astrmobile.ui.components.StatusDot
 
 @Composable
@@ -171,6 +174,15 @@ fun DashboardScreen(
                     ) {
                         Text("停止")
                     }
+                    OutlinedButton(
+                        onClick = { viewModel.restartContainer() },
+                        modifier = Modifier
+                            .weight(0.75f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Text("重启")
+                    }
                 } else {
                     Button(
                         onClick = { startWithService(context) },
@@ -193,12 +205,57 @@ fun DashboardScreen(
 
         Spacer(Modifier.height(14.dp))
 
+        // ---------------------------------------------------------- 后台登录
+        val credentials by produceState<DashboardCredentials?>(null, state) {
+            value = viewModel.readDashboardCredentials()
+        }
+        credentials?.let { creds ->
+            Spacer(Modifier.height(14.dp))
+            SectionCard(
+                title = "AstrBot 后台登录",
+                trailing = {
+                    TextButton(
+                        onClick = { copyText(context, "AstrBot 登录信息", "${creds.username}\n${creds.password}") },
+                    ) {
+                        Text("复制", style = MaterialTheme.typography.labelSmall)
+                    }
+                },
+            ) {
+                Text(
+                    text = "账号",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = creds.username,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "密码（首次启动生成，建议复制保存）",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = creds.password,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 16.sp,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
         // ---------------------------------------------------------- 快捷入口
         SectionCard(title = "快捷入口") {
             QuickEntry(
                 icon = Icons.Rounded.Language,
                 title = "AstrBot 网页后台",
-                detail = "配置模型、插件、知识库，查看对话",
+                detail = "填模型 API Key、装插件、设人格，全在这里",
                 onClick = { onOpenWeb(6185) },
             )
             QuickEntry(

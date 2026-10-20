@@ -3,10 +3,13 @@ package com.astrmobile
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.astrmobile.core.container.AstrBotConfigReader
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
+import com.astrmobile.core.container.DashboardCredentials
 import com.astrmobile.core.data.AppSettings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -90,6 +93,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun stopContainer() {
         viewModelScope.launch { controller.stop() }
     }
+
+    /** 装完插件、改完配置后需要重启容器才会生效。 */
+    fun restartContainer() {
+        viewModelScope.launch {
+            controller.stop()
+            delay(600)
+            controller.start()
+        }
+    }
+
+    suspend fun readDashboardCredentials(): DashboardCredentials? =
+        withContext(Dispatchers.IO) { AstrBotConfigReader.readDashboard(appContainer.paths) }
 
     fun prepareReinstall() {
         // 用户从控制台点"重新安装"时，环境通常仍不完整；把上一轮的 Done 状态清掉，
