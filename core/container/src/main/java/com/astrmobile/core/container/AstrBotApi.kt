@@ -51,6 +51,14 @@ class AstrBotApi(private val port: Int = 6185) {
         val response = request("GET", "/personas", null, cookie)
             ?: return@withContext Result.failure(IllegalStateException("读取人格失败：无响应"))
 
+        // 必须判 ok：cookie 失效时返回的是 error，data 为空，
+        // 不判就会显示成「还没有人格」，把认证问题伪装成空数据。
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "读取人格失败" }),
+            )
+        }
+
         val data = response.data ?: return@withContext Result.success(emptyList())
         // 不同版本这里可能是数组，也可能包一层 {personas: [...]}
         val array = when {
@@ -145,7 +153,9 @@ class AstrBotApi(private val port: Int = 6185) {
             )
         }
 
-        val data = response.body?.optJSONObject("data")
+        val root = response.body
+            ?: return@withContext Result.failure(IllegalStateException("对话返回格式异常"))
+        val data = root.optJSONObject("data")
             ?: return@withContext Result.success(emptyList())
         val array = data.optJSONArray("conversations")
             ?: return@withContext Result.success(emptyList())
