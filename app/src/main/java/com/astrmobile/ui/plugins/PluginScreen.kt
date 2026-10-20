@@ -61,6 +61,7 @@ fun PluginScreen(
     viewModel: MainViewModel,
     onBack: () -> Unit,
     onRestart: () -> Unit,
+    onOpenConfig: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
 
@@ -236,6 +237,7 @@ fun PluginScreen(
                         items(installed, key = { it.dirName }) { plugin ->
                             InstalledRow(
                                 plugin = plugin,
+                                onConfigure = { onOpenConfig(plugin.dirName) },
                                 onUninstall = {
                                     scope.launch {
                                         viewModel.uninstallPlugin(plugin.dirName).fold(
@@ -404,7 +406,11 @@ private fun MarketRow(
 }
 
 @Composable
-private fun InstalledRow(plugin: InstalledPlugin, onUninstall: () -> Unit) {
+private fun InstalledRow(
+    plugin: InstalledPlugin,
+    onConfigure: () -> Unit,
+    onUninstall: () -> Unit,
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -433,6 +439,9 @@ private fun InstalledRow(plugin: InstalledPlugin, onUninstall: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+            TextButton(onClick = onConfigure) {
+                Text("配置", fontSize = 11.sp)
             }
             TextButton(onClick = onUninstall) {
                 Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
