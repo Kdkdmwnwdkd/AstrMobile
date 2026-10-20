@@ -17,6 +17,7 @@ import com.astrmobile.ui.backup.BackupScreen
 import com.astrmobile.ui.diagnostics.DiagnosticsScreen
 import com.astrmobile.ui.knowledge.KnowledgeScreen
 import com.astrmobile.ui.persona.PersonaScreen
+import com.astrmobile.ui.plugins.PluginConfigScreen
 import com.astrmobile.ui.plugins.PluginScreen
 import com.astrmobile.ui.onboarding.OnboardingScreen
 import com.astrmobile.ui.qrcode.QrCodeScreen
@@ -35,6 +36,9 @@ object Routes {
     const val Knowledge = "knowledge"
     const val Diagnostics = "diagnostics"
     const val Backup = "backup"
+    const val PluginConfig = "pluginconfig/{pluginId}"
+
+    fun pluginConfig(pluginId: String) = "pluginconfig/$pluginId"
     const val Web = "web/{port}"
 
     fun web(port: Int) = "web/$port"
@@ -128,6 +132,9 @@ fun AppNav(viewModel: MainViewModel) {
                     viewModel.restartContainer()
                     navController.popBackStack()
                 },
+                onOpenConfig = { pluginId ->
+                    navController.navigate(Routes.pluginConfig(pluginId))
+                },
             )
         }
 
@@ -157,6 +164,21 @@ fun AppNav(viewModel: MainViewModel) {
             DiagnosticsScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(
+            route = Routes.PluginConfig,
+            arguments = listOf(navArgument("pluginId") { type = NavType.StringType }),
+        ) { entry ->
+            PluginConfigScreen(
+                viewModel = viewModel,
+                pluginId = entry.arguments?.getString("pluginId").orEmpty(),
+                onBack = { navController.popBackStack() },
+                onRestart = {
+                    viewModel.restartContainer()
+                    navController.popBackStack()
+                },
             )
         }
 
