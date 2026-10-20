@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.Language
@@ -73,6 +74,7 @@ fun DashboardScreen(
     onOpenPersona: () -> Unit,
     onOpenKnowledge: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenBackup: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -302,6 +304,12 @@ fun DashboardScreen(
         SectionCard(title = "快捷入口") {
             val running = state as? ContainerState.Running
 
+            QuickEntry(
+                icon = Icons.Rounded.CloudUpload,
+                title = "备份与恢复",
+                detail = "折腾坏了能回到之前的状态",
+                onClick = onOpenBackup,
+            )
             QuickEntry(
                 icon = Icons.Rounded.HealthAndSafety,
                 title = "自检",
