@@ -81,16 +81,31 @@ command -v uv >/dev/null 2>&1 || { echo "[bootstrap] 找不到 uv 可执行文�
 
 # ---------------------------------------------------------------- 4. AstrBot
 log "4/6 安装 AstrBot"
-if [ ! -x /opt/astrbot/bin/astrbot ]; then
-  rm -rf /opt/astrbot
-  uv venv /opt/astrbot --python /usr/bin/python3 || { echo "[bootstrap] 创建虚拟环境失败"; exit 15; }
 
-  if ! uv pip install --python /opt/astrbot/bin/python astrbot; then
-    echo "[bootstrap] uv 安装失败，改用 pip 重试"
-    /opt/astrbot/bin/python -m pip install --upgrade pip -i "$PIP_INDEX_URL" || true
-    if ! /opt/astrbot/bin/python -m pip install astrbot -i "$PIP_INDEX_URL"; then
-      echo "[bootstrap] AstrBot 安装失败。常见原因：网络不可达、PyPI 镜像不可用、依赖编译失败"
-      echo "[bootstrap] 可到设置里换 PyPI 镜像后重试；若日志出现 gcc/error，请把上面几十行发回"
+# proot 的 --link2symlink 会把 hardlink 改写成 .l2s.* 符号链接，
+# uv 默认用 hardlink 装包，随后再操作这些链接就会 EPERM。
+# 强制 copy 模式可以绕开；但主路径仍改用系统 venv + pip（纯复制，最稳）。
+export UV_LINK_MODE=copy
+
+if [ ! -x /opt/astrbot/bin/astrbot ]; then
+  rm -rf /opt/astrbot /root/.cache/uv
+
+  if ! python3 -m venv /opt/astrbot; then
+    echo "[bootstrap] 创建虚拟环境失败（python3-venv 是否安装成功？）"
+    exit 15
+  fi
+
+  /opt/astrbot/bin/python -m pip install --no-cache-dir --upgrade pip -i "$PIP_INDEX_URL" || true
+
+  if ! /opt/astrbot/bin/python -m pip install --no-cache-dir astrbot -i "$PIP_INDEX_URL"; then
+    echo "[bootstrap] pip 安装失败，改用 uv（copy 模式）重试"
+    if command -v uv >/dev/null 2>&1; then
+      if ! uv pip install --link-mode=copy --python /opt/astrbot/bin/python astrbot; then
+        echo "[bootstrap] AstrBot 安装失败。请把上面 30 行日志发回，常见原因是镜像不可达或编译失败"
+        exit 16
+      fi
+    else
+      echo "[bootstrap] AstrBot 安装失败，且没有可用的 uv"
       exit 16
     fi
   fi
