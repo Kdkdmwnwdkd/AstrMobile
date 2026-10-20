@@ -9,7 +9,11 @@ import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.container.ConfiguredModel
 import com.astrmobile.core.container.DashboardCredentials
+import com.astrmobile.core.container.EmbeddingConfig
 import com.astrmobile.core.container.InstalledPlugin
+import com.astrmobile.core.container.KnowledgeBase
+import com.astrmobile.core.container.KnowledgeBaseRepository
+import com.astrmobile.core.container.KnowledgeDocument
 import com.astrmobile.core.container.MarketPlugin
 import com.astrmobile.core.container.ModelConfigRepository
 import com.astrmobile.core.container.PersonaItem
@@ -180,6 +184,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         exists: Boolean,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         AstrBotApi().savePersona(cookie, id, prompt, exists)
+    }
+
+    // ---------------------------------------------------------------- 知识库
+
+    suspend fun readEmbeddingConfig(): EmbeddingConfig? = withContext(Dispatchers.IO) {
+        runCatching { KnowledgeBaseRepository.readEmbeddingConfig(appContainer.paths) }.getOrNull()
+    }
+
+    suspend fun saveEmbeddingConfig(
+        apiBase: String,
+        apiKey: String,
+        model: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        KnowledgeBaseRepository.saveEmbeddingConfig(appContainer.paths, apiBase, apiKey, model)
+    }
+
+    suspend fun listKnowledgeBases(cookie: String): Result<List<KnowledgeBase>> =
+        withContext(Dispatchers.IO) { KnowledgeBaseRepository.list(cookie) }
+
+    suspend fun createKnowledgeBase(
+        cookie: String,
+        name: String,
+        embeddingProviderId: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        KnowledgeBaseRepository.create(cookie, name, embeddingProviderId)
+    }
+
+    suspend fun deleteKnowledgeBase(cookie: String, kbId: String): Result<Unit> =
+        withContext(Dispatchers.IO) { KnowledgeBaseRepository.delete(cookie, kbId) }
+
+    suspend fun listKnowledgeDocuments(
+        cookie: String,
+        kbId: String,
+    ): Result<List<KnowledgeDocument>> = withContext(Dispatchers.IO) {
+        KnowledgeBaseRepository.listDocuments(cookie, kbId)
+    }
+
+    suspend fun uploadKnowledgeDocument(
+        cookie: String,
+        kbId: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        KnowledgeBaseRepository.uploadDocument(cookie, kbId, fileName, mimeType, bytes)
+    }
+
+    suspend fun deleteKnowledgeDocument(
+        cookie: String,
+        kbId: String,
+        documentId: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        KnowledgeBaseRepository.deleteDocument(cookie, kbId, documentId)
     }
 
     fun prepareReinstall() {
