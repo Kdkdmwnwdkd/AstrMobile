@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.SmartToy
@@ -69,6 +70,7 @@ fun DashboardScreen(
     onOpenModels: () -> Unit,
     onOpenPlugins: () -> Unit,
     onOpenPersona: () -> Unit,
+    onOpenKnowledge: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -315,6 +317,12 @@ fun DashboardScreen(
                 title = "插件",
                 detail = "表情包、人格、记忆、主动聊天都在这里装",
                 onClick = onOpenPlugins,
+            )
+            QuickEntry(
+                icon = Icons.Rounded.MenuBook,
+                title = "知识库",
+                detail = "上传资料，回答前先查再答",
+                onClick = onOpenKnowledge,
             )
             QuickEntry(
                 icon = Icons.Rounded.Language,
