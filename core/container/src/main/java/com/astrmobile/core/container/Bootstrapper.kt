@@ -109,14 +109,13 @@ class Bootstrapper(
     }
 
     private fun injectScripts() {
+        ScriptInjector.inject(context, paths)
+        // 额外留一份到 assets 目录，方便用户在日志里对照排查
         listOf("bootstrap.sh", "start.sh").forEach { name ->
-            val content = context.assets.open("scripts/$name").use { it.readBytes() }
-            val target = File(paths.rootfsDir, "root/$name")
-            target.parentFile?.mkdirs()
-            target.writeBytes(content)
-            runCatching { android.system.Os.chmod(target.absolutePath, 0b111101101) }
-            // 同时留一份到 assets 目录，方便用户在日志里对照排查。
-            runCatching { File(paths.assetsDir, name).writeBytes(content) }
+            runCatching {
+                val content = File(paths.rootfsDir, "root/$name").readBytes()
+                File(paths.assetsDir, name).writeBytes(content)
+            }
         }
     }
 
