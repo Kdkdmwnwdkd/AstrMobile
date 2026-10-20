@@ -62,6 +62,7 @@ fun DashboardScreen(
     onOpenConsole: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenWeb: (Int) -> Unit,
+    onOpenQr: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -305,11 +306,11 @@ fun DashboardScreen(
             )
             QuickEntry(
                 icon = Icons.Rounded.QrCodeScanner,
-                title = "NapCat 扫码登录",
-                detail = "先填 Token 登录，再在「账号」里扫码",
+                title = "QQ 扫码登录",
+                detail = "二维码直接显示在 App 里，不用进网页",
                 onClick = {
                     if (running?.napcatReady == true) {
-                        onOpenWeb(6099)
+                        onOpenQr()
                     } else {
                         Toast.makeText(context, "NapCat 还在启动，请稍等", Toast.LENGTH_SHORT).show()
                     }
