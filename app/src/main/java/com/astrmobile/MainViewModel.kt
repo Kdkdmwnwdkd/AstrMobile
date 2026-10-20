@@ -30,6 +30,7 @@ import com.astrmobile.core.data.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -177,8 +178,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------------------------------------------------------------- 人格
 
-    suspend fun loginAstrBot(username: String, password: String): Result<String> =
-        withContext(Dispatchers.IO) { AstrBotApi().login(username, password) }
+    /**
+     * 登录 AstrBot 后台。
+     *
+     * 不传密码时用设置里存的那份（默认 astrbot）——用户在人格页填过一次，
+     * 其余页面就不用再填，避免「每个页面各失败一次」。
+     */
+    suspend fun loginAstrBot(password: String? = null): Result<String> =
+        withContext(Dispatchers.IO) {
+            val actual = password
+                ?: appContainer.settings.settings.first().astrBotPassword
+            AstrBotApi().login("astrbot", actual)
+        }
+
+    suspend fun setAstrBotPassword(value: String) {
+        appContainer.settings.setAstrBotPassword(value)
+    }
 
     suspend fun listPersonas(cookie: String): Result<List<PersonaItem>> =
         withContext(Dispatchers.IO) { AstrBotApi().listPersonas(cookie) }
