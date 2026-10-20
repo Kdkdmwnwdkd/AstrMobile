@@ -74,8 +74,10 @@ fun PersonaScreen(
 
     suspend fun ensureSession(force: Boolean = false): String? {
         if (!force) cookie?.let { return it }
-        return viewModel.loginAstrBot("astrbot", password).fold(
+        return viewModel.loginAstrBot(password).fold(
             onSuccess = {
+                // 记住这次成功的密码，插件配置、对话记录、知识库共用
+                viewModel.setAstrBotPassword(password)
                 cookie = it
                 needPassword = false
                 it
