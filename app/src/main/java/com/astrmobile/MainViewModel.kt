@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.astrmobile.core.container.AstrBotApi
+import com.astrmobile.core.container.BackupRepository
+import com.astrmobile.core.container.BackupResult
 import com.astrmobile.core.container.AstrBotConfigReader
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
@@ -187,6 +189,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ): Result<Unit> = withContext(Dispatchers.IO) {
         AstrBotApi().savePersona(cookie, id, prompt, exists)
     }
+
+    // ---------------------------------------------------------------- 备份
+
+    suspend fun createBackup(
+        onProgress: (Int, Int) -> Unit,
+    ): Result<BackupResult> = withContext(Dispatchers.IO) {
+        BackupRepository.create(appContainer.paths, onProgress)
+    }
+
+    suspend fun listBackups(): List<java.io.File> = withContext(Dispatchers.IO) {
+        BackupRepository.list(appContainer.paths)
+    }
+
+    suspend fun restoreBackup(
+        file: java.io.File,
+        onProgress: (Int, Int) -> Unit,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        BackupRepository.restore(appContainer.paths, file, onProgress)
+    }
+
+    fun deleteBackup(file: java.io.File): Boolean = BackupRepository.delete(file)
+
+    fun backupDir(): java.io.File = BackupRepository.backupDir(appContainer.paths)
 
     /**
      * 跑一遍自检，返回逐项结果与一句总结。
