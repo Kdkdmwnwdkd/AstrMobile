@@ -7,6 +7,7 @@ import com.astrmobile.core.container.AstrBotConfigReader
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.container.DashboardCredentials
+import com.astrmobile.core.container.NapCatConfigReader
 import com.astrmobile.core.data.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -105,6 +106,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun readDashboardCredentials(): DashboardCredentials? =
         withContext(Dispatchers.IO) { AstrBotConfigReader.readDashboard(appContainer.paths) }
+
+    suspend fun readNapCatToken(): String? =
+        withContext(Dispatchers.IO) { NapCatConfigReader.readToken(appContainer.paths) }
 
     fun prepareReinstall() {
         // 用户从控制台点"重新安装"时，环境通常仍不完整；把上一轮的 Done 状态清掉，
