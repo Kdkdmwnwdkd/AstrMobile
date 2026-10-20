@@ -27,7 +27,20 @@ class Bootstrapper(
     private val rootfsInstaller = RootfsInstaller(context, paths)
     private val binaryInstaller = BinaryInstaller(paths)
 
+    @Volatile
+    private var activeProcess: Process? = null
+
+    @Volatile
+    private var cancelled = false
+
     fun isReady(): Boolean = paths.isRootfsInstalled() && paths.isBootstrapFinished()
+
+    /** 用户主动取消：杀掉安装脚本，让协程从 readLine 上退出。 */
+    fun cancel() {
+        cancelled = true
+        runCatching { activeProcess?.destroyForcibly() }
+        activeProcess = null
+    }
 
     suspend fun install(
         onStage: suspend (Stage) -> Unit,
@@ -36,6 +49,7 @@ class Bootstrapper(
         pipIndex: String = "https://pypi.tuna.tsinghua.edu.cn/simple",
         githubProxy: String = "https://ghfast.top/",
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        cancelled = false
         try {
             paths.ensureDirectories()
             onStage(Stage.Running("检查工具链", 0.02f, "映射 proot / busybox"))
@@ -82,9 +96,15 @@ class Bootstrapper(
             onStage(Stage.Done)
             Result.success(Unit)
         } catch (error: Throwable) {
-            AppLog.app("安装失败：${error.message}")
-            onStage(Stage.Failed("安装失败", error.message ?: error.javaClass.simpleName))
-            Result.failure(error)
+            if (cancelled) {
+                AppLog.app("安装已被用户取消")
+                onStage(Stage.Idle)
+                Result.failure(IllegalStateException("已取消安装"))
+            } else {
+                AppLog.app("安装失败：${error.message}")
+                onStage(Stage.Failed("安装失败", error.message ?: error.javaClass.simpleName))
+                Result.failure(error)
+            }
         }
     }
 
@@ -124,6 +144,7 @@ class Bootstrapper(
         ProotCommand.applyHostEnvironment(builder, paths)
 
         val process = builder.start()
+        activeProcess = process
         val logFile = paths.installLog
         logFile.parentFile?.mkdirs()
 
@@ -146,6 +167,7 @@ class Bootstrapper(
             }
         } finally {
             runCatching { reader.close() }
+            activeProcess = null
         }
         process.waitFor()
     }
