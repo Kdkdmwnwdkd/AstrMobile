@@ -21,6 +21,7 @@ import com.astrmobile.core.container.KnowledgeDocument
 import com.astrmobile.core.container.MarketPlugin
 import com.astrmobile.core.container.ModelConfigRepository
 import com.astrmobile.core.container.PersonaItem
+import com.astrmobile.core.container.PluginConfigSnapshot
 import com.astrmobile.core.container.PluginRepository
 import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
@@ -188,6 +189,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         exists: Boolean,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         AstrBotApi().savePersona(cookie, id, prompt, exists)
+    }
+
+    suspend fun loadPluginConfig(
+        cookie: String,
+        pluginId: String,
+    ): Result<PluginConfigSnapshot> = withContext(Dispatchers.IO) {
+        AstrBotApi().getPluginConfig(cookie, pluginId)
+    }
+
+    suspend fun savePluginConfig(
+        cookie: String,
+        pluginId: String,
+        config: Map<String, Any?>,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        AstrBotApi().savePluginConfig(cookie, pluginId, config)
     }
 
     // ---------------------------------------------------------------- 备份
