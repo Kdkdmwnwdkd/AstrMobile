@@ -3,6 +3,7 @@ package com.astrmobile
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.astrmobile.core.container.AstrBotApi
 import com.astrmobile.core.container.AstrBotConfigReader
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
@@ -11,6 +12,7 @@ import com.astrmobile.core.container.DashboardCredentials
 import com.astrmobile.core.container.InstalledPlugin
 import com.astrmobile.core.container.MarketPlugin
 import com.astrmobile.core.container.ModelConfigRepository
+import com.astrmobile.core.container.PersonaItem
 import com.astrmobile.core.container.PluginRepository
 import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
@@ -161,6 +163,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun uninstallPlugin(dirName: String): Result<Unit> = withContext(Dispatchers.IO) {
         PluginRepository.uninstall(appContainer.paths, dirName)
+    }
+
+    // ---------------------------------------------------------------- 人格
+
+    suspend fun loginAstrBot(username: String, password: String): Result<String> =
+        withContext(Dispatchers.IO) { AstrBotApi().login(username, password) }
+
+    suspend fun listPersonas(cookie: String): Result<List<PersonaItem>> =
+        withContext(Dispatchers.IO) { AstrBotApi().listPersonas(cookie) }
+
+    suspend fun savePersona(
+        cookie: String,
+        id: String,
+        prompt: String,
+        exists: Boolean,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        AstrBotApi().savePersona(cookie, id, prompt, exists)
     }
 
     fun prepareReinstall() {

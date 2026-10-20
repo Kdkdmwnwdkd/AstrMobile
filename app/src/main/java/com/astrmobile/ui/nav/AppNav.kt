@@ -13,6 +13,7 @@ import com.astrmobile.MainViewModel
 import com.astrmobile.ui.console.ConsoleScreen
 import com.astrmobile.ui.dashboard.DashboardScreen
 import com.astrmobile.ui.models.ModelScreen
+import com.astrmobile.ui.persona.PersonaScreen
 import com.astrmobile.ui.plugins.PluginScreen
 import com.astrmobile.ui.onboarding.OnboardingScreen
 import com.astrmobile.ui.qrcode.QrCodeScreen
@@ -27,6 +28,7 @@ object Routes {
     const val QrCode = "qrcode"
     const val Models = "models"
     const val Plugins = "plugins"
+    const val Persona = "persona"
     const val Web = "web/{port}"
 
     fun web(port: Int) = "web/$port"
@@ -82,6 +84,7 @@ fun AppNav(viewModel: MainViewModel) {
                 onOpenQr = { navController.navigate(Routes.QrCode) },
                 onOpenModels = { navController.navigate(Routes.Models) },
                 onOpenPlugins = { navController.navigate(Routes.Plugins) },
+                onOpenPersona = { navController.navigate(Routes.Persona) },
                 onRepair = {
                     viewModel.prepareReinstall()
                     navController.navigate(Routes.Onboarding)
@@ -110,6 +113,17 @@ fun AppNav(viewModel: MainViewModel) {
 
         composable(Routes.Plugins) {
             PluginScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onRestart = {
+                    viewModel.restartContainer()
+                    navController.popBackStack()
+                },
+            )
+        }
+
+        composable(Routes.Persona) {
+            PersonaScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
                 onRestart = {
