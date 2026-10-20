@@ -73,7 +73,7 @@ fun PluginConfigScreen(
     var saved by remember { mutableStateOf(false) }
 
     LaunchedEffect(pluginId) {
-        val cookie = viewModel.loginAstrBot("astrbot", "astrbot").getOrElse {
+        val cookie = viewModel.loginAstrBot().getOrElse {
             message = "${it.message}（可先在「人格设定」页填入改过的后台密码）"
             isError = true
             loading = false
@@ -152,6 +152,13 @@ fun PluginConfigScreen(
 
             else -> {
                 val list = items.orEmpty()
+                if (list.isEmpty()) {
+                    HintText(
+                        "这个插件没有可编辑的配置项。\n" +
+                            "可能它的参数要在网页后台配，或者本来就不需要配置。",
+                    )
+                    return@Column
+                }
                 Text(
                     text = "共 ${list.size} 项",
                     style = MaterialTheme.typography.labelSmall,
@@ -175,16 +182,32 @@ fun PluginConfigScreen(
                         message = null
                         saved = false
                         scope.launch {
-                            val cookie = viewModel.loginAstrBot("astrbot", "astrbot").getOrNull()
+                            val cookie = viewModel.loginAstrBot().getOrNull()
                             if (cookie == null) {
                                 busy = false
                                 message = "登录 AstrBot 失败"
                                 isError = true
                                 return@launch
                             }
+                            // 数字项先校验：填了非数字就明确报错，
+                            // 不能静默回退成旧值让用户以为改成功了。
+                            val bad = list.firstOrNull { item ->
+                                (item.type == "int" || item.type == "float") &&
+                                    values[item.key]?.toString()?.trim().orEmpty()
+                                        .let { it.isNotEmpty() && it.toDoubleOrNull() == null }
+                            }
+                            if (bad != null) {
+                                busy = false
+                                isError = true
+                                message = "「${bad.label}」不是有效数字"
+                                return@launch
+                            }
+
                             val payload = mutableMapOf<String, Any?>()
                             list.forEach { item ->
-                                payload[item.key] = coerce(item, values[item.key])
+                                // null 不写入：写了会把配置项变成 null，
+                                // 有些插件对此不做兜底，等于把参数清空了。
+                                coerce(item, values[item.key])?.let { payload[item.key] = it }
                             }
                             viewModel.savePluginConfig(cookie, pluginId, payload).fold(
                                 onSuccess = {
