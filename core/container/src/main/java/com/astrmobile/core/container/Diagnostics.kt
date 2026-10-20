@@ -62,6 +62,19 @@ object Diagnostics {
                 detail = state.reason,
                 action = "看实时日志最后 30 行，那里有失败原因",
             )
+            is ContainerState.Restarting -> CheckItem(
+                title = "容器",
+                level = CheckLevel.WARN,
+                detail = "异常退出，第 ${state.attempt}/${state.maxAttempts} 次自动重启" +
+                    "（${state.delaySeconds} 秒后）",
+                action = "原因：${state.lastReason}。反复重启就看实时日志",
+            )
+            ContainerState.Stopping -> CheckItem(
+                title = "容器",
+                level = CheckLevel.WARN,
+                detail = "正在停止",
+                action = "等几秒再点「重新检查」",
+            )
             ContainerState.Stopped, ContainerState.NotInstalled -> CheckItem(
                 title = "容器",
                 level = CheckLevel.FAIL,
@@ -71,7 +84,7 @@ object Diagnostics {
             else -> CheckItem(
                 title = "容器",
                 level = CheckLevel.WARN,
-                detail = state.toString(),
+                detail = "状态未知",
             )
         }
 
