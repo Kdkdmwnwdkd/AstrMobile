@@ -120,6 +120,97 @@ class AstrBotApi(private val port: Int = 6185) {
         Result.success(Unit)
     }
 
+    // ---------------------------------------------------------------- 对话记录
+
+    /**
+     * 读最近的对话。
+     *
+     * 返回 `{conversations: [{title, umo_info, history, updated_at}], pagination}`
+     * history 是 `[{role, content}]`，content 可能是字符串，也可能是多模态数组。
+     */
+    suspend fun listConversations(
+        cookie: String,
+        pageSize: Int = 20,
+    ): Result<List<ConversationSummary>> = withContext(Dispatchers.IO) {
+        val response = request(
+            "GET",
+            "/conversations?page=1&page_size=$pageSize&sort_by=updated_at&sort_order=desc&include_history=true",
+            null,
+            cookie,
+        ) ?: return@withContext Result.failure(IllegalStateException("读取对话失败：无响应"))
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "读取对话失败" }),
+            )
+        }
+
+        val data = response.body?.optJSONObject("data")
+            ?: return@withContext Result.success(emptyList())
+        val array = data.optJSONArray("conversations")
+            ?: return@withContext Result.success(emptyList())
+
+        val items = buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val umoInfo = item.optJSONObject("umo_info")
+                val history = parseHistory(item.optJSONArray("history"))
+                if (history.isEmpty()) continue
+
+                add(
+                    ConversationSummary(
+                        cid = item.optString("cid"),
+                        userId = item.optString("user_id"),
+                        title = item.optString("title").ifBlank {
+                            umoInfo?.optString("alias").orEmpty()
+                        }.ifBlank {
+                            umoInfo?.optString("session_id").orEmpty()
+                        }.ifBlank { "未命名会话" },
+                        messageType = umoInfo?.optString("message_type").orEmpty(),
+                        updatedAt = item.optLong("updated_at"),
+                        history = history,
+                    ),
+                )
+            }
+        }
+        Result.success(items)
+    }
+
+    /** history 里每项是 {role, content}，content 可能是数组，摊平成文本。 */
+    private fun parseHistory(array: JSONArray?): List<ConversationMessage> {
+        if (array == null) return emptyList()
+
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val role = item.optString("role").ifBlank { "unknown" }
+                val rawContent = item.opt("content")
+                val text = when (rawContent) {
+                    is String -> rawContent
+                    is JSONArray -> buildString {
+                        for (i in 0 until rawContent.length()) {
+                            val part = rawContent.opt(i)
+                            if (part is JSONObject) {
+                                val piece = part.optString("text")
+                                if (piece.isNotBlank()) {
+                                    if (isNotEmpty()) append(' ')
+                                    append(piece)
+                                }
+                            } else if (part is String) {
+                                if (isNotEmpty()) append(' ')
+                                append(part)
+                            }
+                        }
+                    }
+                    null -> ""
+                    else -> rawContent.toString()
+                }.trim()
+
+                if (text.isNotEmpty()) add(ConversationMessage(role = role, content = text))
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- 插件配置
 
     /**
@@ -357,4 +448,20 @@ data class PluginConfigItem(
 data class PluginConfigSnapshot(
     val pluginId: String,
     val items: List<PluginConfigItem>,
+)
+
+/** 对话里的一条消息。 */
+data class ConversationMessage(
+    val role: String,
+    val content: String,
+)
+
+/** 一个会话的摘要 + 完整历史。 */
+data class ConversationSummary(
+    val cid: String,
+    val userId: String,
+    val title: String,
+    val messageType: String,
+    val updatedAt: Long,
+    val history: List<ConversationMessage>,
 )
