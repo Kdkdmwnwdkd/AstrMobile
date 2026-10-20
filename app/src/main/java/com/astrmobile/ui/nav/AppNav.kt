@@ -13,6 +13,7 @@ import com.astrmobile.MainViewModel
 import com.astrmobile.ui.console.ConsoleScreen
 import com.astrmobile.ui.dashboard.DashboardScreen
 import com.astrmobile.ui.models.ModelScreen
+import com.astrmobile.ui.diagnostics.DiagnosticsScreen
 import com.astrmobile.ui.knowledge.KnowledgeScreen
 import com.astrmobile.ui.persona.PersonaScreen
 import com.astrmobile.ui.plugins.PluginScreen
@@ -31,6 +32,7 @@ object Routes {
     const val Plugins = "plugins"
     const val Persona = "persona"
     const val Knowledge = "knowledge"
+    const val Diagnostics = "diagnostics"
     const val Web = "web/{port}"
 
     fun web(port: Int) = "web/$port"
@@ -88,6 +90,7 @@ fun AppNav(viewModel: MainViewModel) {
                 onOpenPlugins = { navController.navigate(Routes.Plugins) },
                 onOpenPersona = { navController.navigate(Routes.Persona) },
                 onOpenKnowledge = { navController.navigate(Routes.Knowledge) },
+                onOpenDiagnostics = { navController.navigate(Routes.Diagnostics) },
                 onRepair = {
                     viewModel.prepareReinstall()
                     navController.navigate(Routes.Onboarding)
@@ -144,6 +147,13 @@ fun AppNav(viewModel: MainViewModel) {
                     viewModel.restartContainer()
                     navController.popBackStack()
                 },
+            )
+        }
+
+        composable(Routes.Diagnostics) {
+            DiagnosticsScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
             )
         }
 
