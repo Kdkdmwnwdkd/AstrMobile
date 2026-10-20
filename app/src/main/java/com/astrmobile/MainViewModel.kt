@@ -7,7 +7,9 @@ import com.astrmobile.core.container.AstrBotApi
 import com.astrmobile.core.container.AstrBotConfigReader
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
+import com.astrmobile.core.container.CheckItem
 import com.astrmobile.core.container.ConfiguredModel
+import com.astrmobile.core.container.Diagnostics
 import com.astrmobile.core.container.DashboardCredentials
 import com.astrmobile.core.container.EmbeddingConfig
 import com.astrmobile.core.container.InstalledPlugin
@@ -184,6 +186,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         exists: Boolean,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         AstrBotApi().savePersona(cookie, id, prompt, exists)
+    }
+
+    /**
+     * 跑一遍自检，返回逐项结果与一句总结。
+     *
+     * 全部读事实：容器状态、端口探活、配置文件、NapCat 登录接口、最近日志。
+     */
+    suspend fun diagnose(): Pair<List<CheckItem>, String> = withContext(Dispatchers.IO) {
+        val items = mutableListOf<CheckItem>()
+        items += Diagnostics.checkInstall(appContainer.paths)
+        items += Diagnostics.checkRuntime(controller.state.value)
+        items += Diagnostics.checkModel(appContainer.paths)
+        items += Diagnostics.checkQq(appContainer.paths)
+        items += Diagnostics.checkPlugins(appContainer.paths)
+        items += Diagnostics.checkChannel(controller.logs.value)
+        items to Diagnostics.summary(items)
     }
 
     // ---------------------------------------------------------------- 知识库
