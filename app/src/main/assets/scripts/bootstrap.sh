@@ -143,16 +143,28 @@ fi
 log "6/6 初始化 AstrBot 数据目录"
 cd /root || exit 17
 
-# astrbot init 在无 TTY 的环境里会等待输入而永久挂起（实测卡在 "Initializing AstrBot..."）。
-# 用 timeout + /dev/null 兜住：超时就放弃，astrbot run 首次启动会自动建数据目录。
-if [ ! -d /root/data ]; then
-  echo "[bootstrap] 预初始化（最多 90 秒，超时不影响启动）"
-  if timeout 90 astrbot init </dev/null >/root/astrbot-init.log 2>&1; then
-    echo "[bootstrap] 预初始化完成"
+# astrbot init 默认是交互式的（会问 "Install AstrBot to this directory?"），
+# 无 TTY 时必须加 --yes，否则直接中止且不生成 .astrbot 标记，
+# 之后 astrbot run 会报 "not a valid AstrBot root directory"。
+if [ ! -f /root/.astrbot ]; then
+  echo "[bootstrap] 执行 astrbot init --yes"
+  # 预设后台初始密码，用户第一次进后台就能用
+  export ASTRBOT_DASHBOARD_INITIAL_PASSWORD="${ASTRBOT_DASHBOARD_INITIAL_PASSWORD:-astrbot}"
+  # 上次可能留下半成品配置，删掉让它按默认值重建
+  rm -f /root/data/cmd_config.json 2>/dev/null || true
+
+  if timeout 120 astrbot init --yes </dev/null >>/root/astrbot-init.log 2>&1; then
+    echo "[bootstrap] 初始化完成"
   else
-    echo "[bootstrap] 预初始化超时或跳过，首次启动会自动初始化"
+    echo "[bootstrap] init 未正常完成，手工补建目录与标记"
     tail -5 /root/astrbot-init.log 2>/dev/null || true
   fi
+
+  # 兜底：只要目录和标记齐全，astrbot run 就能启动并自建默认配置
+  mkdir -p /root/data/config /root/data/plugins /root/data/temp
+  touch /root/.astrbot
+else
+  echo "检测到已初始化（/root/.astrbot），跳过"
 fi
 
 # 生成一份给用户看的下一步说明

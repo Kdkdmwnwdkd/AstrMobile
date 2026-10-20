@@ -31,10 +31,8 @@ object ProotCommand {
             "-b", "/system",
             "-b", "/apex",
             "-b", "/dev/pts",
-            "-b", "/proc/self/fd:/dev/fd",
-            "-b", "/proc/self/fd/0:/dev/stdin",
-            "-b", "/proc/self/fd/1:/dev/stdout",
-            "-b", "/proc/self/fd/2:/dev/stderr",
+            // 注意：不要再绑 /proc/self/fd/0..2。/ Android App 没有 stdin，源路径不存在，
+            // proot 会为每个失败的绑定打一条 warning，且容器内 /dev/stdin 本来就是坏的。
             "-b", "${paths.tmpDir.absolutePath}:${paths.tmpDir.absolutePath}",
             "-b", "${paths.tmpDir.absolutePath}:/dev/shm",
             "-b", "${paths.filesDir.absolutePath}:${paths.filesDir.absolutePath}",
