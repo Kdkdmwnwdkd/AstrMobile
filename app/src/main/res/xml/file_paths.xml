@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 只暴露日志目录：导出排错日志用，绝不把 rootfs 或配置目录交给外部应用 -->
+<!--
+  只暴露两个目录：
+  - runtime/logs  导出排错日志
+  - backups       导出备份包
+  绝不把 rootfs 或配置目录整体交给外部应用。
+-->
 <paths>
     <files-path name="runtime_logs" path="runtime/logs/" />
+    <files-path name="backups" path="backups/" />
 </paths>
