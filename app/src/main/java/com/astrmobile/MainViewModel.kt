@@ -11,6 +11,7 @@ import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.container.CheckItem
 import com.astrmobile.core.container.ConfiguredModel
+import com.astrmobile.core.container.ConversationSummary
 import com.astrmobile.core.container.Diagnostics
 import com.astrmobile.core.container.DashboardCredentials
 import com.astrmobile.core.container.EmbeddingConfig
@@ -190,6 +191,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ): Result<Unit> = withContext(Dispatchers.IO) {
         AstrBotApi().savePersona(cookie, id, prompt, exists)
     }
+
+    suspend fun listConversations(cookie: String): Result<List<ConversationSummary>> =
+        withContext(Dispatchers.IO) { AstrBotApi().listConversations(cookie) }
 
     suspend fun loadPluginConfig(
         cookie: String,
