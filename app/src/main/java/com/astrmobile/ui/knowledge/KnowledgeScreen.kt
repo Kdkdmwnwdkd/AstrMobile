@@ -74,6 +74,7 @@ fun KnowledgeScreen(
 
     var cookie by remember { mutableStateOf<String?>(null) }
     var embedding by remember { mutableStateOf<EmbeddingConfig?>(null) }
+    var embeddingSaved by remember { mutableStateOf(false) }
     var kbs by remember { mutableStateOf<List<KnowledgeBase>>(emptyList()) }
     var selected by remember { mutableStateOf<KnowledgeBase?>(null) }
     var docs by remember { mutableStateOf<List<KnowledgeDocument>>(emptyList()) }
@@ -94,7 +95,7 @@ fun KnowledgeScreen(
 
     suspend fun ensureCookie(): String? {
         cookie?.let { return it }
-        return viewModel.loginAstrBot("astrbot", "astrbot").fold(
+        return viewModel.loginAstrBot().fold(
             onSuccess = { cookie = it; it },
             onFailure = {
                 message = "${it.message}（可在「人格设定」页填入你改过的密码）"
@@ -283,8 +284,10 @@ fun KnowledgeScreen(
                             viewModel.saveEmbeddingConfig(embBase, embKey, embModel).fold(
                                 onSuccess = {
                                     isError = false
-                                    message = "已保存，重启后生效"
-                                    embedding = viewModel.readEmbeddingConfig()
+                                    // 不重新读取：配置写进文件了，但 AstrBot 还在用旧配置，
+                                    // 读到了会让界面误以为「可以建库了」。
+                                    embeddingSaved = true
+                                    message = "已保存。必须重启一次容器，AstrBot 才会加载这个向量模型。"
                                 },
                                 onFailure = {
                                     isError = true
@@ -299,7 +302,7 @@ fun KnowledgeScreen(
                     shape = RoundedCornerShape(12.dp),
                 ) { Text("保存") }
 
-                if (embedding == null && message?.contains("重启") == true) {
+                if (embeddingSaved) {
                     TextButton(onClick = onRestart, modifier = Modifier.fillMaxWidth()) {
                         Text("立即重启使配置生效")
                     }
