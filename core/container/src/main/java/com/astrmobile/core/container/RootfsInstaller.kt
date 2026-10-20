@@ -2,7 +2,6 @@ package com.astrmobile.core.container
 
 import android.content.Context
 import android.system.Os
-import com.astrmobile.core.common.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
@@ -16,12 +15,13 @@ import java.io.InputStream
 /**
  * 把内置的 Ubuntu rootfs（tar.xz）解压到私有目录。
  *
- * 两个必须处理的细节：
- * 1. 归档的所有条目都带统一顶层目录前缀（实测 `ubuntu-noble-aarch64/`，12684 条无一例外），
- *    必须剥离，否则 rootfs 会落到 `rootfs/ubuntu/ubuntu-noble-aarch64/usr/...`，
- *    proot 用 `-r rootfs/ubuntu` 找不到 `/bin/bash`，首次安装必然失败。
- * 2. 归档内的字符设备（/dev/null 等）不能用普通文件代替，直接跳过——
- *    运行时会由 `-b /dev` 覆盖，写一个 0 字节普通文件反而会埋雷。
+ * 这里不再"猜"顶层目录前缀，原因是一个真实的坑：
+ * - Python tarfile 读出的首条目是 `ubuntu-noble-aarch64`（无尾斜杠）
+ * - Commons Compress 读同一份归档得到的是 `ubuntu-noble-aarch64/`（**带尾斜杠**）
+ * 任何基于名字的判断都会被这两种形式之一打脸，导致剥离静默失效。
+ *
+ * 因此改为结构判定：先原样解压到 staging，再找"真正包含 usr/bin/env 的那一层"
+ * 作为根，最后 rename 到目标位置（同分区 rename 是 O(1)，不会真的搬 300MB）。
  */
 class RootfsInstaller(
     private val context: Context,
@@ -30,14 +30,7 @@ class RootfsInstaller(
 
     companion object {
         private const val ASSET_PATH = "rootfs/ubuntu-rootfs.tar.xz"
-        private const val MIN_FREE_BYTES = 900L * 1024 * 1024
-
-        /** FHS 标准根目录：出现这些名字说明归档没有外层目录，不能当作前缀剥离。 */
-        private val STANDARD_ROOT_DIRS = setOf(
-            "bin", "boot", "dev", "etc", "home", "lib", "lib32", "lib64",
-            "media", "mnt", "opt", "proc", "root", "run", "sbin", "srv",
-            "sys", "tmp", "usr", "var", "snap", "lost+found",
-        )
+        private const val MIN_FREE_BYTES = 1200L * 1024 * 1024
     }
 
     suspend fun install(onProgress: suspend (Float, String) -> Unit): Result<Unit> =
@@ -53,17 +46,14 @@ class RootfsInstaller(
                     "存储空间不足：需要至少 ${MIN_FREE_BYTES / 1024 / 1024}MB，当前仅 ${free / 1024 / 1024}MB"
                 }
 
+                val staging = File(paths.runtimeDir, "rootfs-staging")
+                if (staging.exists()) staging.deleteRecursively()
+                staging.mkdirs()
+
                 val totalBytes = runCatching { context.assets.openFd(ASSET_PATH).use { it.length } }
                     .getOrDefault(0L)
 
-                // 上次解压中断可能留下半成品（例如 bin 已是实体目录而非符号链接），
-                // 直接覆盖会因 EEXIST 静默失败，导致 bin/bash 永远缺失。先清干净。
-                if (paths.rootfsDir.exists()) {
-                    paths.rootfsDir.deleteRecursively()
-                }
-                paths.rootfsDir.mkdirs()
                 onProgress(0f, "准备解压 rootfs")
-
                 val raw = context.assets.open(
                     ASSET_PATH,
                     android.content.res.AssetManager.ACCESS_STREAMING,
@@ -74,25 +64,9 @@ class RootfsInstaller(
                     TarArchiveInputStream(xz).use { tar ->
                         var entry: TarArchiveEntry? = tar.nextEntry
                         var entries = 0
-                        var topLevelPrefix: String? = null
-                        var prefixResolved = false
-
                         while (entry != null) {
                             val current = entry
-                            val rawName = current.name.trimStart('.', '/')
-
-                            if (!prefixResolved) {
-                                prefixResolved = true
-                                topLevelPrefix = detectTopLevel(current, rawName)
-                                if (topLevelPrefix != null) {
-                                    AppLog.app("rootfs 顶层目录：$topLevelPrefix（解压时剥离）")
-                                }
-                            }
-
-                            val name = stripTopLevel(rawName, topLevelPrefix)
-                            if (name.isNotBlank()) {
-                                extractEntry(tar, current, name)
-                            }
+                            extractEntry(tar, current, staging)
 
                             entries++
                             if (entries % 200 == 0) {
@@ -101,57 +75,63 @@ class RootfsInstaller(
                                 } else {
                                     0f
                                 }
-                                onProgress(fraction, "解压 ${name.take(48)}")
+                                onProgress(fraction * 0.9f, "解压 ${current.name.take(48)}")
                             }
                             entry = tar.nextEntry
                         }
                     }
                 }
 
-                check(File(paths.rootfsDir, "usr/bin/env").exists()) {
-                    "rootfs 解压完成但缺少 usr/bin/env"
+                onProgress(0.92f, "识别根目录结构")
+                val resolvedRoot = resolveRoot(staging)
+                    ?: error("rootfs 结构异常：找不到 usr/bin/env。顶层内容：" + describeTops(staging))
+
+                onProgress(0.95f, "整理根目录")
+                if (paths.rootfsDir.exists()) paths.rootfsDir.deleteRecursively()
+                paths.rootfsDir.parentFile?.mkdirs()
+
+                val movedByRename = resolvedRoot.renameTo(paths.rootfsDir)
+                if (!movedByRename) {
+                    // 极端情况（跨分区/权限）退化为复制，慢但正确
+                    resolvedRoot.copyRecursively(paths.rootfsDir, overwrite = true)
                 }
-                check(File(paths.rootfsDir, "bin/bash").exists()) {
-                    "rootfs 解压完成但缺少 bin/bash"
+                if (staging.exists()) staging.deleteRecursively()
+
+                check(File(paths.rootfsDir, "usr/bin/env").exists()) {
+                    "rootfs 整理后仍缺少 usr/bin/env，顶层内容：" + describeTops(paths.rootfsDir)
+                }
+                check(File(paths.rootfsDir, "usr/bin/bash").exists()) {
+                    "rootfs 整理后仍缺少 usr/bin/bash，顶层内容：" + describeTops(paths.rootfsDir)
                 }
 
                 paths.markRootfsInstalled()
                 onProgress(1f, "rootfs 解压完成")
-                AppLog.app("rootfs 解压完成：${paths.rootfsDir.absolutePath}")
             }
         }
 
     /**
-     * 识别归档的统一顶层目录。
-     *
-     * 实测该归档首条目是目录 `ubuntu-noble-aarch64`（**不带尾斜杠**），
-     * 所以不能用 "name 里是否含 /" 来判断。
-     *
-     * 同时必须排除 FHS 标准根目录名：如果某个 rootfs 直接在根下打包，
-     * 首条目会是 `bin` / `usr` 这类目录，把它们当前缀会把 `bin/bash` 剥成 `bash`。
+     * 找到真正的根：自己就是根，或者唯一一个含 usr/bin/env 的直接子目录。
+     * 兼容归档"带外层目录"和"不带外层目录"两种打包方式。
      */
-    private fun detectTopLevel(entry: TarArchiveEntry, name: String): String? {
-        if (!entry.isDirectory) return null
-        if (name.contains('/')) return null
-        val normalized = name.lowercase()
-        if (normalized in STANDARD_ROOT_DIRS) return null
-        return name.ifBlank { null }
+    private fun resolveRoot(dir: File): File? {
+        if (File(dir, "usr/bin/env").exists()) return dir
+        val children = dir.listFiles()?.filter { it.isDirectory } ?: return null
+        return children.firstOrNull { File(it, "usr/bin/env").exists() }
     }
 
-    private fun stripTopLevel(name: String, prefix: String?): String {
-        if (prefix == null) return name
-        if (name == prefix) return ""
-        val withSlash = "$prefix/"
-        return if (name.startsWith(withSlash)) name.removePrefix(withSlash) else name
+    /** 失败时把顶层结构写进错误信息，避免用户只看到"失败"两个字。 */
+    private fun describeTops(dir: File): String {
+        val names = dir.list()?.take(8) ?: return "目录不可读"
+        return if (names.isEmpty()) "空目录" else names.joinToString(", ")
     }
 
-    private fun extractEntry(tar: TarArchiveInputStream, entry: TarArchiveEntry, name: String) {
-        val target = File(paths.rootfsDir, name)
-        val rootPath = paths.rootfsDir.canonicalPath
-        val targetPath = runCatching { target.canonicalPath }.getOrElse {
-            // 路径穿越或非法名称，直接跳过而不是让安装整体失败。
-            return
-        }
+    private fun extractEntry(tar: TarArchiveInputStream, entry: TarArchiveEntry, root: File) {
+        val name = entry.name.trimStart('.', '/')
+        if (name.isBlank()) return
+
+        val target = File(root, name)
+        val rootPath = root.canonicalPath
+        val targetPath = runCatching { target.canonicalPath }.getOrElse { return }
         if (!targetPath.startsWith(rootPath)) return
 
         when {
@@ -163,10 +143,7 @@ class RootfsInstaller(
             entry.isSymbolicLink -> {
                 target.parentFile?.mkdirs()
                 runCatching {
-                    if (target.exists() || runCatching {
-                            java.nio.file.Files.isSymbolicLink(target.toPath())
-                        }.getOrDefault(false)
-                    ) {
+                    if (target.exists() || java.nio.file.Files.isSymbolicLink(target.toPath())) {
                         target.delete()
                     }
                     Os.symlink(entry.linkName, target.absolutePath)
@@ -175,16 +152,14 @@ class RootfsInstaller(
 
             entry.isLink -> {
                 target.parentFile?.mkdirs()
-                val source = File(paths.rootfsDir, entry.linkName.trimStart('.', '/'))
+                val source = File(root, entry.linkName.trimStart('.', '/'))
                 runCatching {
                     if (target.exists()) target.delete()
-                    if (source.exists()) {
-                        source.copyTo(target, overwrite = true)
-                    }
+                    if (source.exists()) source.copyTo(target, overwrite = true)
                 }
             }
 
-            // 字符设备 / 块设备 / FIFO：不能落成普通文件，交给运行时 bind 的 /dev
+            // 字符设备 / 块设备 / FIFO：不能落成普通文件，运行时会由 -b /dev 覆盖
             entry.isCharacterDevice || entry.isBlockDevice || entry.isFIFO -> Unit
 
             else -> {
@@ -196,7 +171,6 @@ class RootfsInstaller(
     }
 
     private fun applyMode(file: File, mode: Int) {
-        // 只保留 rwx 权限位，绝不设置 setuid/setgid，避免在容器内提权。
         val permission = mode and 0x1FF
         if (permission != 0) {
             runCatching { Os.chmod(file.absolutePath, permission) }
