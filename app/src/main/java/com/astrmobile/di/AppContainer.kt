@@ -25,7 +25,7 @@ class AppContainer(context: Context) {
 
     val settings: SettingsRepository = SettingsRepository(appContext)
 
-    val controller: ContainerController = ContainerController(paths)
+    val controller: ContainerController = ContainerController(appContext, paths)
 
     val bootstrapper: Bootstrapper = Bootstrapper(appContext, paths)
 }
