@@ -8,7 +8,10 @@ import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.container.ConfiguredModel
 import com.astrmobile.core.container.DashboardCredentials
+import com.astrmobile.core.container.InstalledPlugin
+import com.astrmobile.core.container.MarketPlugin
 import com.astrmobile.core.container.ModelConfigRepository
+import com.astrmobile.core.container.PluginRepository
 import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
 import com.astrmobile.core.data.AppSettings
@@ -138,6 +141,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun removeModel(): Result<Unit> = withContext(Dispatchers.IO) {
         ModelConfigRepository.remove(appContainer.paths)
+    }
+
+    // ---------------------------------------------------------------- 插件
+
+    suspend fun loadPluginMarket(force: Boolean = false): Result<List<MarketPlugin>> =
+        withContext(Dispatchers.IO) { PluginRepository.loadMarket(appContainer.context, force) }
+
+    suspend fun listInstalledPlugins(): List<InstalledPlugin> = withContext(Dispatchers.IO) {
+        runCatching { PluginRepository.listInstalled(appContainer.paths) }.getOrDefault(emptyList())
+    }
+
+    suspend fun installPlugin(
+        plugin: MarketPlugin,
+        onProgress: (String) -> Unit,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        PluginRepository.install(appContainer.paths, plugin, onProgress)
+    }
+
+    suspend fun uninstallPlugin(dirName: String): Result<Unit> = withContext(Dispatchers.IO) {
+        PluginRepository.uninstall(appContainer.paths, dirName)
     }
 
     fun prepareReinstall() {

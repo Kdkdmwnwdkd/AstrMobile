@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.SmartToy
@@ -65,6 +66,7 @@ fun DashboardScreen(
     onOpenWeb: (Int) -> Unit,
     onOpenQr: () -> Unit,
     onOpenModels: () -> Unit,
+    onOpenPlugins: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -299,6 +301,12 @@ fun DashboardScreen(
                 title = "对话模型",
                 detail = "填 API Key，机器人才能开口说话",
                 onClick = onOpenModels,
+            )
+            QuickEntry(
+                icon = Icons.Rounded.Extension,
+                title = "插件",
+                detail = "表情包、人格、记忆、主动聊天都在这里装",
+                onClick = onOpenPlugins,
             )
             QuickEntry(
                 icon = Icons.Rounded.Language,

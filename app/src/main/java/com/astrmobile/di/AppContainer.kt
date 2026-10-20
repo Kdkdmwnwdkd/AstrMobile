@@ -18,6 +18,9 @@ class AppContainer(context: Context) {
 
     private val appContext = context.applicationContext
 
+    /** 插件市场缓存、解压临时文件都要用它。 */
+    val context: Context get() = appContext
+
     val paths: ContainerPaths = ContainerPaths(
         filesDir = appContext.filesDir,
         nativeLibDir = File(appContext.applicationInfo.nativeLibraryDir),
