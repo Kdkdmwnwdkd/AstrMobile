@@ -171,15 +171,18 @@ fun PluginScreen(
         }
 
         // ---------------------------------------------------------- 提示条
+        // 用局部 val 接一下：state 变量无法智能转换，直接 !! 在并发更新时有风险
+        val bannerText = message
+        val bannerError = loadError
         when {
             installingId != null -> Banner(progressText.ifBlank { "正在安装…" }, isError = false)
-            message != null -> Banner(
-                message!!,
+            bannerText != null -> Banner(
+                bannerText,
                 isError = isError,
                 action = if (needRestart) "重启生效" else null,
                 onAction = onRestart,
             )
-            loadError != null -> Banner(loadError!!, isError = true)
+            bannerError != null -> Banner(bannerError, isError = true)
         }
 
         Spacer(Modifier.height(4.dp))
