@@ -61,7 +61,9 @@ fun QrCodeScreen(
     onBack: () -> Unit,
     onOpenWebFallback: () -> Unit,
 ) {
-    val tokens by produceState<List<String>>(emptyList()) { value = viewModel.readNapCatTokens() }
+    // null = 还在读口令，空列表 = 确实没有候选。不用空列表当初始值，
+    // 否则首帧会闪一下红色错误。
+    val tokens by produceState<List<String>?>(null) { value = viewModel.readNapCatTokens() }
 
     var qrcode by remember { mutableStateOf<Bitmap?>(null) }
     var statusText by remember { mutableStateOf("正在连接 NapCat…") }
@@ -70,8 +72,9 @@ fun QrCodeScreen(
     var reloadKey by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(tokens, reloadKey) {
-        if (tokens.isEmpty()) {
-            statusText = "还没读到 NapCat 的 Token，请确认容器已启动并稍等 30 秒"
+        val candidates = tokens ?: return@LaunchedEffect
+        if (candidates.isEmpty()) {
+            statusText = "还没读到 NapCat 的口令，请确认容器已启动并稍等 30 秒"
             isError = true
             return@LaunchedEffect
         }
@@ -86,7 +89,7 @@ fun QrCodeScreen(
         // NapCat 的口令可能被随机化过，逐个候选尝试，避免一次失败就卡死。
         var credential: String? = null
         var lastError = ""
-        for (candidate in tokens) {
+        for (candidate in candidates) {
             val result = api.login(candidate)
             if (result.isSuccess) {
                 credential = result.getOrNull()
@@ -99,7 +102,7 @@ fun QrCodeScreen(
             statusText = buildString {
                 append("登录 NapCat 失败：")
                 append(lastError.ifBlank { "口令不匹配" })
-                append("\n请点下方「重启机器人」后再进来；若仍失败，把这段发我。")
+                append("\n点「重启机器人」后再进来；仍失败就把这段发我。")
             }
             isError = true
             return@LaunchedEffect
@@ -124,18 +127,47 @@ fun QrCodeScreen(
         isError = qrcode == null
         if (qrcode == null) return@LaunchedEffect
 
+        var qrFetchedAt = System.currentTimeMillis()
+        var failures = 0
+
         while (isActive) {
+            // 二维码有效期约 2 分钟，过期后画面上是张废码，扫了也没反应。
+            // 提前刷新，但不用重跑整个流程（会重新登录 NapCat）。
+            if (System.currentTimeMillis() - qrFetchedAt > 100_000) {
+                val fresh = api.fetchQrcode(credential).getOrNull()
+                val bitmap = fresh?.let { QrCodeDecoder.decode(it) }
+                if (bitmap != null) {
+                    qrcode = bitmap
+                    qrFetchedAt = System.currentTimeMillis()
+                    statusText = "二维码已自动刷新，请用手机 QQ 扫描"
+                    isError = false
+                }
+            }
+
             val status = api.checkStatus(credential)
-            if (status != null) {
+            if (status == null) {
+                failures++
+                if (failures >= 5) {
+                    statusText = "跟 NapCat 的连接断开了，请返回后重新进入本页"
+                    isError = true
+                    break
+                }
+            } else {
+                failures = 0
                 when {
                     status.isLogin -> {
                         statusText = "登录成功，QQ 已接入"
                         isSuccess = true
+                        isError = false
                         break
                     }
                     status.isOffline -> statusText = "账号已掉线，请重新扫码"
                     status.loginPhase == "qrcode_scanned" ||
                         status.loginPhase == "initializing" -> statusText = "已扫描，请在手机上确认登录"
+                    status.loginPhase == "qrcode_expired" -> {
+                        statusText = "二维码已过期，正在重新获取…"
+                        qrFetchedAt = 0
+                    }
                     !status.error.isNullOrBlank() -> {
                         statusText = "登录出错：${status.error}"
                         isError = true

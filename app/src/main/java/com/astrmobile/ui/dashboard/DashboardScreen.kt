@@ -236,7 +236,7 @@ fun DashboardScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "密码（首次启动生成，建议复制保存）",
+                    text = "密码（默认口令，登录后建议自行修改）",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

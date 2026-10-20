@@ -36,23 +36,49 @@ mkdir -p /tmp/.X11-unix
 chmod 1777 /tmp/.X11-unix 2>/dev/null || true
 
 # ------------------------------------------------------------------ 定位 NapCat 配置目录
-# 官方安装器与自建脚本的路径不同，按 webui.json 反查最准。
+# 安装方式不同，配置可能在 /root/napcat/config，也可能在 /opt/QQ/.../napcat/config。
+# 先按 webui.json / onebot11*.json 反查，再把结果写进标记文件供 App 直接读取
+# （App 侧不要自己遍历容器目录，手机上会很慢）。
 NAPCAT_CONFIG_DIR=""
 if [ -f /root/launcher.sh ]; then
-  WEBUI_PATH=$(find /root -maxdepth 7 -name webui.json 2>/dev/null | head -1)
-  if [ -n "$WEBUI_PATH" ]; then
-    NAPCAT_CONFIG_DIR=$(dirname "$WEBUI_PATH")
-  else
-    NAPCAT_CONFIG_DIR=$(find /root -maxdepth 7 -type d -name config -path "*napcat*" 2>/dev/null | head -1)
+  # 按「最可能命中」的顺序找，避免一上来就全盘扫描（容器里 node_modules 很多）。
+  HIT=$(find /root/napcat -maxdepth 4 -name "webui.json" 2>/dev/null | head -1)
+  if [ -z "$HIT" ]; then
+    HIT=$(find /opt/QQ -maxdepth 6 -name "webui.json" 2>/dev/null | head -1)
   fi
-  if [ -z "$NAPCAT_CONFIG_DIR" ]; then
-    for candidate in \
-      /root/napcat/config \
-      /root/Napcat/opt/QQ/resources/app/app_launcher/napcat/config
-    do
-      if [ -d "$candidate" ]; then NAPCAT_CONFIG_DIR="$candidate"; break; fi
-    done
+  if [ -z "$HIT" ]; then
+    HIT=$(find /root -maxdepth 6 -name "webui.json" 2>/dev/null | head -1)
   fi
+  if [ -z "$HIT" ]; then
+    HIT=$(find /root /opt -maxdepth 6 -name "onebot11*.json" 2>/dev/null | head -1)
+  fi
+  if [ -n "$HIT" ]; then
+    NAPCAT_CONFIG_DIR=$(dirname "$HIT")
+    echo "$NAPCAT_CONFIG_DIR" > /root/.astrmobile-napcat-config
+  fi
+fi
+
+# ------------------------------------------------------------------ 固定 NapCat 口令
+# 直接改配置文件最可靠：NapCat 只在 token 为空或等于默认值 'napcat' 时才随机化，
+# 写成固定值后它就照读。环境变量在某些版本上不被识别，所以两条路都留。
+if [ -n "$NAPCAT_CONFIG_DIR" ] && [ -f "$NAPCAT_CONFIG_DIR/webui.json" ]; then
+  NAPCAT_CONFIG_DIR="$NAPCAT_CONFIG_DIR" python3 - <<'PY' || echo "[start] 固定 NapCat 口令失败"
+import json
+import os
+
+path = os.path.join(os.environ["NAPCAT_CONFIG_DIR"], "webui.json")
+try:
+    with open(path, encoding="utf-8") as fp:
+        cfg = json.load(fp)
+except Exception:
+    raise SystemExit(0)
+
+if cfg.get("token") != "astrmobile":
+    cfg["token"] = "astrmobile"
+    with open(path, "w", encoding="utf-8") as fp:
+        json.dump(cfg, fp, ensure_ascii=False, indent=2)
+    print("[start] 已将 NapCat WebUI 口令固定为 astrmobile")
+PY
 fi
 
 # ------------------------------------------------------------------ NapCat 侧：反向 WS
@@ -116,8 +142,10 @@ fi
 # ------------------------------------------------------------------ AstrBot 侧：aiocqhttp
 # 对应地，AstrBot 要开一个 aiocqhttp 平台等待 NapCat 连进来。
 if [ -f /root/data/cmd_config.json ]; then
-  python3 - <<'PY' || echo "[start] 写入 AstrBot 平台配置失败（不影响启动）"
+  python3 - <<'PY' || echo "[start] 写入 AstrBot 配置失败（不影响启动）"
+import hashlib
 import json
+import os
 
 path = "/root/data/cmd_config.json"
 try:
@@ -126,6 +154,22 @@ try:
 except Exception:
     raise SystemExit(0)
 
+changed = False
+
+# 首次运行且从未设过密码时固定成默认口令。
+# 否则 AstrBot 会生成 24 位随机密码，用户不知道该填什么，只能看到登录页。
+dash = cfg.setdefault("dashboard", {})
+if not dash.get("password") and not dash.get("pbkdf2_password"):
+    raw = "astrbot"
+    salt = os.urandom(16)
+    digest = hashlib.pbkdf2_hmac("sha256", raw.encode(), salt, 600000)
+    dash["pbkdf2_password"] = "pbkdf2_sha256$600000${}${}".format(salt.hex(), digest.hex())
+    dash["password"] = hashlib.md5(raw.encode()).hexdigest()
+    dash["password_storage_upgraded"] = True
+    changed = True
+    print("[start] 已设置 AstrBot 后台默认口令（astrbot）")
+
+# 开启 aiocqhttp，等 NapCat 连进来。
 desired = {
     "id": "qq_astrmobile",
     "type": "aiocqhttp",
@@ -134,18 +178,17 @@ desired = {
     "ws_reverse_port": 6199,
     "ws_reverse_token": "",
 }
-
 platforms = cfg.setdefault("platform", [])
 existing = next(
     (item for item in platforms if isinstance(item, dict) and item.get("type") == "aiocqhttp"),
     None,
 )
-
 if existing is None:
     platforms.append(desired)
     changed = True
 else:
-    changed = any(existing.get(k) != v for k, v in desired.items())
+    if any(existing.get(k) != v for k, v in desired.items()):
+        changed = True
     existing.update(desired)
 
 if changed:
@@ -159,8 +202,17 @@ fi
 if [ -f /root/launcher.sh ]; then
   echo "[start] 启动 NapCat"
   nohup bash /root/launcher.sh > /root/napcat.log 2>&1 &
-  echo $! > /root/napcat.pid
-  echo "[start] NapCat pid=$!"
+  NAPCAT_PID=$!
+  echo "$NAPCAT_PID" > /root/napcat.pid
+
+  # 立刻退出的情况以前完全看不出来，只在扫码页表现为「连不上」。
+  sleep 2
+  if kill -0 "$NAPCAT_PID" 2>/dev/null; then
+    echo "[start] NapCat 进程存活（pid=$NAPCAT_PID）"
+  else
+    echo "[start] NapCat 启动后立即退出，日志末尾："
+    tail -8 /root/napcat.log 2>/dev/null
+  fi
 else
   if [ -f /root/.napcat-install-failed ]; then
     echo "[start] NapCat 未安装（上次安装失败），QQ 功能不可用"

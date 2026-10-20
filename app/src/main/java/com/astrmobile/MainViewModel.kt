@@ -119,7 +119,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         listOfNotNull(NapCatApi.DEFAULT_TOKEN, fromFile?.takeIf { it.isNotBlank() }).distinct()
     }
 
-    suspend fun readNapCatToken(): String? = readNapCatTokens().firstOrNull()
+    /** 只返回配置里真实存在的口令，用于界面展示；读不到就别显示，避免给出错的值。 */
+    suspend fun readNapCatToken(): String? = withContext(Dispatchers.IO) {
+        runCatching { NapCatConfigReader.readToken(appContainer.paths) }.getOrNull()
+    }
 
     fun prepareReinstall() {
         // 用户从控制台点"重新安装"时，环境通常仍不完整；把上一轮的 Done 状态清掉，

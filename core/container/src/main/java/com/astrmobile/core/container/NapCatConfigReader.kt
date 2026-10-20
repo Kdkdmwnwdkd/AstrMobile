@@ -4,36 +4,60 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * 读取 NapCat WebUI 的登录 Token。
+ * 读取 NapCat WebUI 的登录口令。
  *
- * NapCat 官方安装器把配置放在 QQ 资源目录里，不同版本/安装方式路径不同，
- * 所以这里按候选路径逐个尝试，最后再从启动日志里兜底抓一次。
+ * 路径随安装方式变化（`/root/napcat/config`、`/opt/QQ/.../napcat/config` 等），
+ * 所以优先读 start.sh 写下的标记文件，再退回固定候选，最后从启动日志里抓。
  *
- * 没有这个 Token，用户打开 6099 只能看到登录页，无法进入扫码界面。
+ * 注意 App 侧不做目录递归遍历：容器里 QQ 的 resources 目录有数万文件，
+ * 在手机上遍历会卡好几秒。
  */
 object NapCatConfigReader {
 
-    private val CONFIG_CANDIDATES = listOf(
-        "root/Napcat/opt/QQ/resources/app/app_launcher/napcat/config/webui.json",
-        "root/napcat/opt/QQ/resources/app/app_launcher/napcat/config/webui.json",
-        "root/napcat/config/webui.json",
-        "root/.config/NapCat/config/webui.json",
-        "root/.config/napcat/config/webui.json",
+    /** start.sh 在容器内写下的配置目录绝对路径（容器视角）。 */
+    private const val HINT_FILE = "root/.astrmobile-napcat-config"
+
+    private val CONFIG_DIR_CANDIDATES = listOf(
+        "root/napcat/config",
+        "opt/QQ/resources/app/app_launcher/napcat/config",
+        "root/Napcat/opt/QQ/resources/app/app_launcher/napcat/config",
+        "root/.config/NapCat/config",
+        "root/.config/napcat/config",
+        "root/napcat/napcat/config",
     )
 
     fun readToken(paths: ContainerPaths): String? {
-        for (relative in CONFIG_CANDIDATES) {
-            val file = File(paths.rootfsDir, relative)
-            if (!file.exists()) continue
-            val token = runCatching {
-                JSONObject(file.readText()).optString("token")
-            }.getOrNull()
-            if (!token.isNullOrBlank()) return token
+        configDir(paths)?.let { dir ->
+            runCatching {
+                JSONObject(File(dir, "webui.json").readText()).optString("token")
+            }.getOrNull()?.takeIf { it.isNotBlank() }?.let { return it }
         }
         return readTokenFromLog(paths)
     }
 
-    /** 兜底：NapCat 启动日志里通常会打印一次 WebUI token。 */
+    /** 定位 NapCat 的 config 目录；供写入连接配置时复用。 */
+    fun configDir(paths: ContainerPaths): File? {
+        // 1) start.sh 写的标记（最准，且是 O(1)）
+        val hint = File(paths.rootfsDir, HINT_FILE)
+        if (hint.exists()) {
+            val raw = runCatching { hint.readText().trim() }.getOrNull()
+            if (!raw.isNullOrBlank()) {
+                val dir = File(paths.rootfsDir, raw.removePrefix("/"))
+                if (dir.isDirectory) return dir
+            }
+        }
+
+        // 2) 固定候选
+        for (relative in CONFIG_DIR_CANDIDATES) {
+            val dir = File(paths.rootfsDir, relative)
+            if (File(dir, "webui.json").exists() || File(dir, "onebot11.json").exists()) {
+                return dir
+            }
+        }
+        return null
+    }
+
+    /** 兜底：NapCat 启动日志里会打印一次 WebUI 口令。 */
     private fun readTokenFromLog(paths: ContainerPaths): String? {
         val log = File(paths.rootfsDir, "root/napcat.log")
         if (!log.exists()) return null

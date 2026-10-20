@@ -66,7 +66,8 @@ class NapCatApi(private val port: Int = 6099) {
     fun tokenHash(token: String): String = runCatching {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest((token + ".napcat").toByteArray(Charsets.UTF_8))
-        digest.joinToString("") { byte -> "%02x".format(byte) }
+        // 必须显式按无符号展开：byte 是有符号的，负数直接格式化成 8 位 f。
+        digest.joinToString("") { byte -> "%02x".format(byte.toInt() and 0xFF) }
     }.getOrDefault("")
 
     suspend fun fetchQrcode(credential: String): Result<String> = withContext(Dispatchers.IO) {
@@ -115,7 +116,11 @@ class NapCatApi(private val port: Int = 6099) {
                 connection.errorStream
             }
             val text = stream?.bufferedReader()?.use(BufferedReader::readText) ?: return null
-            JSONObject(text)
+            // 有些失败（端口被别的服务占用）会返回 HTML，直接 JSONObject() 会抛异常，
+            // 上层只会看到「无响应」，排错时完全没用。
+            runCatching { JSONObject(text) }.getOrElse {
+                JSONObject().put("message", text.trim().take(120).ifBlank { "NapCat 返回空响应" })
+            }
         } catch (error: Throwable) {
             null
         } finally {
