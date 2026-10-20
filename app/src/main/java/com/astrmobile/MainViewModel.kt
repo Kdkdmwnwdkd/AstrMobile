@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.astrmobile.core.container.AstrBotConfigReader
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
+import com.astrmobile.core.container.ConfiguredModel
 import com.astrmobile.core.container.DashboardCredentials
+import com.astrmobile.core.container.ModelConfigRepository
 import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
 import com.astrmobile.core.data.AppSettings
@@ -122,6 +124,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** 只返回配置里真实存在的口令，用于界面展示；读不到就别显示，避免给出错的值。 */
     suspend fun readNapCatToken(): String? = withContext(Dispatchers.IO) {
         runCatching { NapCatConfigReader.readToken(appContainer.paths) }.getOrNull()
+    }
+
+    suspend fun readModels(): List<ConfiguredModel> = withContext(Dispatchers.IO) {
+        runCatching { ModelConfigRepository.read(appContainer.paths) }.getOrDefault(emptyList())
+    }
+
+    /** 保存模型配置。写入的是容器内的 AstrBot 配置，重启容器后生效。 */
+    suspend fun saveModel(apiBase: String, apiKey: String, model: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            ModelConfigRepository.save(appContainer.paths, apiBase, apiKey, model)
+        }
+
+    suspend fun removeModel(): Result<Unit> = withContext(Dispatchers.IO) {
+        ModelConfigRepository.remove(appContainer.paths)
     }
 
     fun prepareReinstall() {

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.Button
@@ -63,6 +64,7 @@ fun DashboardScreen(
     onOpenSettings: () -> Unit,
     onOpenWeb: (Int) -> Unit,
     onOpenQr: () -> Unit,
+    onOpenModels: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -293,9 +295,15 @@ fun DashboardScreen(
             val running = state as? ContainerState.Running
 
             QuickEntry(
+                icon = Icons.Rounded.SmartToy,
+                title = "对话模型",
+                detail = "填 API Key，机器人才能开口说话",
+                onClick = onOpenModels,
+            )
+            QuickEntry(
                 icon = Icons.Rounded.Language,
                 title = "AstrBot 网页后台",
-                detail = "填模型 API Key、装插件、设人格，全在这里",
+                detail = "装插件、设人格、看对话记录",
                 onClick = {
                     if (running?.astrbotReady == true) {
                         onOpenWeb(6185)

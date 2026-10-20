@@ -12,6 +12,7 @@ import androidx.navigation.navArgument
 import com.astrmobile.MainViewModel
 import com.astrmobile.ui.console.ConsoleScreen
 import com.astrmobile.ui.dashboard.DashboardScreen
+import com.astrmobile.ui.models.ModelScreen
 import com.astrmobile.ui.onboarding.OnboardingScreen
 import com.astrmobile.ui.qrcode.QrCodeScreen
 import com.astrmobile.ui.settings.SettingsScreen
@@ -23,6 +24,7 @@ object Routes {
     const val Console = "console"
     const val Settings = "settings"
     const val QrCode = "qrcode"
+    const val Models = "models"
     const val Web = "web/{port}"
 
     fun web(port: Int) = "web/$port"
@@ -76,6 +78,7 @@ fun AppNav(viewModel: MainViewModel) {
                 onOpenSettings = { navController.navigate(Routes.Settings) },
                 onOpenWeb = { port -> navController.navigate(Routes.web(port)) },
                 onOpenQr = { navController.navigate(Routes.QrCode) },
+                onOpenModels = { navController.navigate(Routes.Models) },
                 onRepair = {
                     viewModel.prepareReinstall()
                     navController.navigate(Routes.Onboarding)
@@ -88,6 +91,17 @@ fun AppNav(viewModel: MainViewModel) {
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
                 onOpenWebFallback = { navController.navigate(Routes.web(6099)) },
+            )
+        }
+
+        composable(Routes.Models) {
+            ModelScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onRestart = {
+                    viewModel.restartContainer()
+                    navController.popBackStack()
+                },
             )
         }
 
