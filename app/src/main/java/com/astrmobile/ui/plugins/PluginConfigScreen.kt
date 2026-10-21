@@ -163,9 +163,10 @@ fun PluginConfigScreen(
             else -> {
                 val list = items.orEmpty()
                 if (list.isEmpty()) {
+                    // 这是常态，不是故障：AstrBot 的插件本来就不强制提供配置结构
                     HintText(
-                        "这个插件没有可编辑的配置项。\n" +
-                            "可能它的参数要在网页后台配，或者本来就不需要配置。",
+                        "这个插件没有提供配置界面。\n\n" +
+                            "多数情况下它装上就已经在工作了；需要调参数的话，去 AstrBot 后台 →「插件」里看它自己的说明。",
                     )
                     return@Column
                 }

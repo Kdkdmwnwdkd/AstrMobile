@@ -262,8 +262,10 @@ class AstrBotApi(private val port: Int = 6185) {
         val current = root.optJSONObject("config")
 
         if (schema == null) {
-            return@withContext Result.failure(
-                IllegalStateException("这个插件没有可配置项（可能没提供配置结构）"),
+            // 大多数社区插件根本没有 _conf_schema.json：它们装上就能用，
+            // 或者靠改配置文件调参数。这不是错误，别用红字吓人。
+            return@withContext Result.success(
+                PluginConfigSnapshot(pluginId = pluginId, items = emptyList(), hasSchema = false),
             )
         }
 
@@ -698,6 +700,8 @@ data class PluginConfigItem(
 data class PluginConfigSnapshot(
     val pluginId: String,
     val items: List<PluginConfigItem>,
+    /** false = 这个插件没有提供配置结构，不是读取失败。 */
+    val hasSchema: Boolean = true,
 )
 
 /** 对话里的一条消息。 */

@@ -296,9 +296,10 @@ fun PluginScreen(
         }
 
         Text(
-            text = "插件装在容器里，返回上一页会自动重启容器生效（也可点上面「立即重启」）。" +
-                "首次启动可能自动装 Python 依赖，稍慢属正常。",
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+            text = "市场里的插件由社区维护，能不能用取决于它是否跟得上你的 AstrBot 版本。" +
+                "装完回「已安装」看有没有红字：没红字就是加载成功了；" +
+                "点「配置」空白不代表坏了，很多插件本来就没有配置界面。",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             lineHeight = 16.sp,
