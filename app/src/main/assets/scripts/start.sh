@@ -16,6 +16,37 @@ export NAPCAT_WEBUI_PREFERRED_PORT=6099
 echo "[start] 容器已启动 $(date '+%F %T')"
 echo "[start] 工作目录: $(pwd)"
 
+# ------------------------------------------------------------------ 清理残留
+# proot 被强杀时，容器内的 AstrBot / QQ 会变成孤儿继续跑：它们仍占着
+# /root/astrbot.lock 和 6185 / 6099 端口，新实例一起来就报
+# "Cannot acquire lock file. Please check if another instance is running"。
+# proot 的 --kill-on-exit 只盯直接 tracee，孙进程不保险，所以启动前自己清一遍。
+# 只按绝对路径匹配（/opt/astrbot、/opt/QQ、/root/napcat），碰不到宿主上的别的应用。
+STALE_PIDS=""
+for proc_dir in /proc/[0-9]*; do
+  [ -d "$proc_dir" ] || continue
+  stale_pid=${proc_dir#/proc/}
+  [ "$stale_pid" = "$$" ] && continue
+  stale_cmd=$(tr '\0' ' ' < "$proc_dir/cmdline" 2>/dev/null) || continue
+  [ -z "$stale_cmd" ] && continue
+  case "$stale_cmd" in
+    *"/opt/astrbot/bin"*|*"/opt/QQ/"*|*"/root/napcat/"*|*"/root/launcher.sh"*)
+      echo "[start] 发现上次遗留的进程 $stale_pid：$(echo "$stale_cmd" | cut -c1-70)"
+      STALE_PIDS="$STALE_PIDS $stale_pid"
+      ;;
+  esac
+done
+
+if [ -n "$STALE_PIDS" ]; then
+  kill -TERM $STALE_PIDS 2>/dev/null
+  sleep 2
+  for stale_pid in $STALE_PIDS; do
+    kill -0 "$stale_pid" 2>/dev/null && kill -9 "$stale_pid" 2>/dev/null
+  done
+  rm -f /root/astrbot.lock
+  echo "[start] 残留进程已清理，锁与端口释放"
+fi
+
 # ------------------------------------------------------------------ 自愈初始化
 # astrbot run 只校验 /root/.astrbot 是否存在（check_astrbot_root），
 # 没有就报 "not a valid AstrBot root directory" 并退出。

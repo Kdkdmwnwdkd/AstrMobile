@@ -2,6 +2,8 @@ package com.astrmobile.core.container
 
 import com.astrmobile.core.common.AppLog
 import com.astrmobile.core.common.RingBuffer
+import android.system.Os
+import android.system.OsConstants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -151,6 +153,8 @@ class ContainerController(
             restartJob = null
             restartAttempts = 0
             val current = process ?: run {
+                // App 重启过、内存里没有进程句柄，但容器可能还在跑（孤儿），也要收掉
+                killContainerRemnants()
                 _state.value = ContainerState.Stopped
                 return@withLock
             }
@@ -159,6 +163,8 @@ class ContainerController(
             runCatching { paths.stopSentinel.writeText("1") }
 
             // 先温和终止：proot 会把信号转发给容器内的 AstrBot / NapCat。
+            // 真机上这一步经常走不通（proot 收到 TERM 后直接退出、tracee 变孤儿），
+            // 所以不能靠它保证干净退出 —— 兜底交给 start.sh 启动前的清场。
             runCatching { current.destroy() }
             val exited = waitForExit(current, timeoutMs = 8_000)
             if (!exited) {
@@ -166,6 +172,11 @@ class ContainerController(
                 runCatching { current.destroyForcibly() }
                 waitForExit(current, timeoutMs = 3_000)
             }
+
+            // proot 死了不代表容器里的进程也死了：它们会变成孤儿，继续占着
+            // astrbot.lock 和 6185/6099 端口，下次启动直接报
+            // "Cannot acquire lock file"。这里按绝对路径收一遍。
+            killContainerRemnants()
 
             cleanupAfterExit(current)
         }
@@ -178,6 +189,10 @@ class ContainerController(
         if (currentState is ContainerState.Starting || currentState is ContainerState.Running) {
             return
         }
+
+        // 先收掉上次留下的孤儿 AstrBot / QQ：它们占着 astrbot.lock，
+        // 不清理的话起容器只会得到一句 "Cannot acquire lock file"。
+        killContainerRemnants()
 
         val pid = runCatching { paths.pidFile.readText().trim().toLong() }.getOrNull() ?: return
         if (pid <= 0) {
@@ -198,6 +213,47 @@ class ContainerController(
             appendLog(AppLog.container("清理遗留容器进程 pid=$pid"))
         }
         runCatching { paths.pidFile.delete() }
+    }
+
+    /**
+     * 清理容器遗留进程（AstrBot / QQ / NapCat）。
+     *
+     * proot 只是 ptrace 的观察者，它被 SIGKILL 后，容器里的进程会被内核 detach
+     * 并继续运行（Android 上 `--kill-on-exit` 对此不可靠）。这些孤儿会一直占着
+     * `/root/astrbot.lock`，导致下次启动报 "Cannot acquire lock file"。
+     *
+     * 按绝对路径匹配而不是按名字匹配：宿主上可能有用户的官方 QQ，
+     * 只认 `/opt/astrbot/bin`、`/opt/QQ/`、`/root/napcat/` 这种容器内独有的路径。
+     */
+    private fun killContainerRemnants() {
+        val patterns = listOf("/opt/astrbot/bin", "/opt/QQ/", "/root/napcat/", "/root/launcher.sh")
+        val pids = runCatching {
+            File("/proc").list()?.filter { name -> name.all(Char::isDigit) }
+        }.getOrNull().orEmpty()
+        if (pids.isEmpty()) return
+
+        val victims = pids.mapNotNull { name ->
+            val pid = name.toIntOrNull() ?: return@mapNotNull null
+            if (pid == android.os.Process.myPid()) return@mapNotNull null
+            // 只读前 512 字节：命令行可能上千字节，读全没有意义
+            val cmdline = runCatching {
+                File("/proc/$name/cmdline").inputStream().use { stream ->
+                    val buffer = ByteArray(512)
+                    val read = stream.read(buffer).coerceAtLeast(0)
+                    String(buffer, 0, read, Charsets.UTF_8)
+                }.replace('\u0000', ' ')
+            }.getOrNull().orEmpty()
+            if (cmdline.isBlank()) return@mapNotNull null
+            pid.takeIf { patterns.any(cmdline::contains) }
+        }
+        if (victims.isEmpty()) return
+
+        victims.forEach { pid -> runCatching { Os.kill(pid, OsConstants.SIGTERM) } }
+        Thread.sleep(600)
+        victims.forEach { pid -> runCatching { Os.kill(pid, OsConstants.SIGKILL) } }
+        appendLog(AppLog.container("清理容器残留进程 ${victims.size} 个（AstrBot / QQ 未随 proot 退出）"))
+        // 进程都死了，锁一定已释放；文件留着只会让下次启动多一次误判
+        runCatching { File(paths.rootfsDir, "root/astrbot.lock").delete() }
     }
 
     /** 允许外部（如安装流程）把日志并入统一时间线，保证导出时能看到完整现场。 */
@@ -232,7 +288,11 @@ class ContainerController(
                 }
             }
         } catch (error: Throwable) {
-            appendLog(AppLog.error("CT", "读取容器输出失败", error))
+            // 主动停止时我们会关掉输出流，读取线程必然抛 InterruptedIOException。
+            // 这是预期行为，不该在日志里显示成一条红色 ERROR 吓人。
+            if (_state.value !is ContainerState.Stopping && !userStopRequested) {
+                appendLog(AppLog.error("CT", "读取容器输出失败", error))
+            }
         } finally {
             val exit = runCatching { target.exitValue() }.getOrDefault(-1)
             appendLog(AppLog.container("容器进程退出，exit=$exit"))
