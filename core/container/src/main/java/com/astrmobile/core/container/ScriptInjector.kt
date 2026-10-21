@@ -13,7 +13,8 @@ import java.io.File
  */
 object ScriptInjector {
 
-    private val SCRIPTS = listOf("bootstrap.sh", "start.sh")
+    // restart-napcat.sh 由 NapCat 看护逻辑调用：QQ 进程单独挂掉时只重启协议端
+    private val SCRIPTS = listOf("bootstrap.sh", "start.sh", "restart-napcat.sh")
 
     fun inject(context: Context, paths: ContainerPaths) {
         paths.rootfsDir.mkdirs()

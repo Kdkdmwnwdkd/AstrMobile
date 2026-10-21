@@ -18,11 +18,15 @@ object ProotCommand {
         workdir: String,
         argv: List<String>,
         containerEnv: Map<String, String>,
+        // 短命令（如重启 NapCat）必须关掉，否则 proot 退出会连带杀掉刚拉起的后台进程。
+        killOnExit: Boolean = true,
     ): List<String> {
         val command = mutableListOf(
             paths.prootBin.absolutePath,
             "-0",
-            "--kill-on-exit",
+        )
+        if (killOnExit) command += "--kill-on-exit"
+        command += listOf(
             "-r", paths.rootfsDir.absolutePath,
             "--link2symlink",
             "-b", "/dev",

@@ -107,11 +107,22 @@ try:
 except Exception:
     raise SystemExit(0)
 
+changed = False
 if cfg.get("token") != "astrmobile":
     cfg["token"] = "astrmobile"
+    changed = True
+    print("[start] 已将 NapCat WebUI 口令固定为 astrmobile")
+
+# 只监听本机。proot 与宿主共用网络栈，NapCat WebUI 能直接操作 QQ 账号，
+# 绑 0.0.0.0 等于把账号交给同网段的任何人。App 自己走 127.0.0.1，不受影响。
+if cfg.get("host") != "127.0.0.1":
+    cfg["host"] = "127.0.0.1"
+    changed = True
+    print("[start] 已将 NapCat WebUI 绑定到 127.0.0.1")
+
+if changed:
     with open(path, "w", encoding="utf-8") as fp:
         json.dump(cfg, fp, ensure_ascii=False, indent=2)
-    print("[start] 已将 NapCat WebUI 口令固定为 astrmobile")
 PY
 fi
 
@@ -202,6 +213,13 @@ if not dash.get("password") and not dash.get("pbkdf2_password"):
     dash["password_storage_upgraded"] = True
     changed = True
     print("[start] 已设置 AstrBot 后台默认口令（astrbot）")
+
+# 后台只监听本机。默认 0.0.0.0 在 proot 下等于对同网段开放，
+# 而它的口令是固定的 astrbot——不收紧就是白送一个后台入口。
+if dash.get("host") != "127.0.0.1":
+    dash["host"] = "127.0.0.1"
+    changed = True
+    print("[start] 已将 AstrBot 后台绑定到 127.0.0.1")
 
 # 开启 aiocqhttp，等 NapCat 连进来。
 # 只碰自己建的这一条（id=qq_astrmobile）：如果用户已经在网页里配过别的

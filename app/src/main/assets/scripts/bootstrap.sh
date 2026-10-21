@@ -82,6 +82,12 @@ command -v uv >/dev/null 2>&1 || { echo "[bootstrap] 找不到 uv 可执行文�
 # ---------------------------------------------------------------- 4. AstrBot
 log "4/6 安装 AstrBot"
 
+# 锁定大版本：AstrBot 的配置结构在小版本之间会变（4.29 把 provider 拆成了
+# provider_sources），而 App 的 ModelConfigRepository 直接读写这个结构。
+# 不锁的话，上游一改就会表现为「模型配置保存成功但下次打开又是空的」。
+ASTRBOT_SPEC="${ASTRBOT_SPEC:-astrbot>=4.29,<4.30}"
+log "目标版本约束: $ASTRBOT_SPEC"
+
 # proot 的 --link2symlink 会把 hardlink 改写成 .l2s.* 符号链接，
 # uv 默认用 hardlink 装包，随后再操作这些链接就会 EPERM。
 # 强制 copy 模式可以绕开；但主路径仍改用系统 venv + pip（纯复制，最稳）。
@@ -97,10 +103,10 @@ if [ ! -x /opt/astrbot/bin/astrbot ]; then
 
   /opt/astrbot/bin/python -m pip install --no-cache-dir --upgrade pip -i "$PIP_INDEX_URL" || true
 
-  if ! /opt/astrbot/bin/python -m pip install --no-cache-dir astrbot -i "$PIP_INDEX_URL"; then
+  if ! /opt/astrbot/bin/python -m pip install --no-cache-dir "$ASTRBOT_SPEC" -i "$PIP_INDEX_URL"; then
     echo "[bootstrap] pip 安装失败，改用 uv（copy 模式）重试"
     if command -v uv >/dev/null 2>&1; then
-      if ! uv pip install --link-mode=copy --python /opt/astrbot/bin/python astrbot; then
+      if ! uv pip install --link-mode=copy --python /opt/astrbot/bin/python "$ASTRBOT_SPEC"; then
         echo "[bootstrap] AstrBot 安装失败。请把上面 30 行日志发回，常见原因是镜像不可达或编译失败"
         exit 16
       fi

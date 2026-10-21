@@ -60,6 +60,18 @@ class ContainerController(
     private var userStopRequested = false
     private var restartJob: Job? = null
 
+    /**
+     * NapCat 的独立看护状态。
+     *
+     * 容器的"活着"只等于 AstrBot 活着（start.sh 里 exec 的是它，NapCat 是 nohup 后台）。
+     * Electron 被系统 OOM 掉以后，proot 不动、AstrBot 不动，光看进程会把"QQ 已掉线"
+     * 一直显示成"运行中"。所以这里单独盯 6099，连续失败就只重启 QQ 协议端。
+     */
+    @Volatile private var containerStartedAt = 0L
+    @Volatile private var napcatRestartInFlight = false
+    private var napcatDownTicks = 0
+    private var lastNapcatRestartAt = 0L
+
     /** 日志写盘走单消费者，避免每个调用方都同步 open/close 文件。 */
     private val logQueue = Channel<String>(Channel.UNLIMITED)
     private var lastPublishAt = 0L
@@ -133,6 +145,9 @@ class ContainerController(
 
                 val started = builder.start()
                 process = started
+                containerStartedAt = System.currentTimeMillis()
+                napcatDownTicks = 0
+                lastNapcatRestartAt = 0L
                 started.safePid()?.let { pid ->
                     runCatching { paths.pidFile.writeText(pid.toString()) }
                 }
@@ -152,6 +167,7 @@ class ContainerController(
             restartJob?.cancel()
             restartJob = null
             restartAttempts = 0
+            napcatDownTicks = 0
             val current = process ?: run {
                 // App 重启过、内存里没有进程句柄，但容器可能还在跑（孤儿），也要收掉
                 killContainerRemnants()
@@ -362,9 +378,79 @@ class ContainerController(
                     _state.value = ContainerState.Running(astrbotReady, napcatReady)
                 }
                 // 稳定运行 60s 后清零重启计数，避免历史故障导致后续无法自愈
-                healthyTicks = if (astrbotReady || napcatReady) healthyTicks + 1 else 0
+                // 只认 AstrBot：它才是容器的主进程，NapCat 单独活着说明不了容器健康
+                healthyTicks = if (astrbotReady) healthyTicks + 1 else 0
                 if (healthyTicks >= 30) restartAttempts = 0
+
+                watchNapcat(astrbotReady, napcatReady)
                 delay(2_000)
+            }
+        }
+    }
+
+    /**
+     * 单独看护 NapCat：6099 连续 [NAPCAT_FAIL_TICKS] 次探测失败就重启 QQ 协议端。
+     *
+     * 触发条件刻意收紧，避免误杀正常的冷启动：
+     * - AstrBot 已就绪（说明容器本体没问题，问题出在 QQ 这一侧）；
+     * - 已过宽限期（Electron + QQ 客户端冷启动本身就慢）；
+     * - launcher.sh 存在（没装 NapCat 的机器不该被反复重启）。
+     */
+    private fun watchNapcat(astrbotReady: Boolean, napcatReady: Boolean) {
+        if (!autoRestartEnabled) return
+        if (napcatReady) {
+            napcatDownTicks = 0
+            return
+        }
+        if (!astrbotReady) return
+        if (System.currentTimeMillis() - containerStartedAt < NAPCAT_GRACE_MS) return
+        // 没装 NapCat（安装失败或用户主动跳过）时，重启也不会有结果
+        if (!File(paths.rootfsDir, "root/launcher.sh").exists()) return
+
+        napcatDownTicks++
+        if (napcatDownTicks < NAPCAT_FAIL_TICKS) return
+
+        val now = System.currentTimeMillis()
+        if (napcatRestartInFlight) return
+        if (now - lastNapcatRestartAt < NAPCAT_RESTART_COOLDOWN_MS) return
+
+        napcatDownTicks = 0
+        lastNapcatRestartAt = now
+        restartNapcat()
+    }
+
+    /** 只重启 NapCat，不触碰 AstrBot 与容器本身。 */
+    private fun restartNapcat() {
+        napcatRestartInFlight = true
+        appendLog(
+            AppLog.container(
+                "NapCat 连续 ${NAPCAT_FAIL_TICKS * 2} 秒无响应，单独重启 QQ 协议端（AstrBot 不受影响）",
+            ),
+        )
+        scope.launch {
+            try {
+                val command = ProotCommand.build(
+                    paths = paths,
+                    workdir = "/root",
+                    argv = listOf("/bin/bash", "/root/restart-napcat.sh"),
+                    containerEnv = ProotCommand.defaultContainerEnv(paths, currentTimezone()),
+                    // 这个 proot 是短命进程，退出时不能带走刚拉起的 NapCat
+                    killOnExit = false,
+                )
+                val builder = ProcessBuilder(command)
+                    .directory(paths.filesDir)
+                    .redirectErrorStream(true)
+                ProotCommand.applyHostEnvironment(builder, paths)
+
+                val proc = builder.start()
+                proc.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                    lines.filter { it.isNotBlank() }.forEach { appendLog(it) }
+                }
+                appendLog(AppLog.container("NapCat 重启流程结束，exit=${proc.waitFor()}"))
+            } catch (error: Throwable) {
+                appendLog(AppLog.error("CT", "NapCat 重启失败", error))
+            } finally {
+                napcatRestartInFlight = false
             }
         }
     }
@@ -440,5 +526,14 @@ class ContainerController(
 
     companion object {
         private const val MAX_RESTART_ATTEMPTS = 3
+
+        /** 2 秒探测一次，连续 30 次（60 秒）失败才认定 NapCat 真的挂了。 */
+        private const val NAPCAT_FAIL_TICKS = 30
+
+        /** 容器启动后的宽限期：Electron + QQ 客户端冷启动本身就要半分钟以上。 */
+        private const val NAPCAT_GRACE_MS = 120_000L
+
+        /** 两次重启之间至少隔 5 分钟，避免反复拉起把 CPU 和内存打满。 */
+        private const val NAPCAT_RESTART_COOLDOWN_MS = 300_000L
     }
 }
