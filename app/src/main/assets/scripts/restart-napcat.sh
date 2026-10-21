@@ -53,6 +53,12 @@ mkdir -p /tmp/.X11-unix
 chmod 1777 /tmp/.X11-unix 2>/dev/null || true
 
 # ---------------------------------------------------------------- 起新的
+# 与 start.sh 一致：日志超过 5MB 只留尾部 1MB，避免长期运行把存储吃满
+if [ -f /root/napcat.log ] && [ "$(stat -c%s /root/napcat.log 2>/dev/null || echo 0)" -gt 5242880 ]; then
+  tail -c 1048576 /root/napcat.log > /root/napcat.log.tmp 2>/dev/null \
+    && mv /root/napcat.log.tmp /root/napcat.log
+fi
+
 echo "[napcat-restart] 重新拉起 NapCat"
 nohup bash /root/launcher.sh > /root/napcat.log 2>&1 &
 NEW_PID=$!

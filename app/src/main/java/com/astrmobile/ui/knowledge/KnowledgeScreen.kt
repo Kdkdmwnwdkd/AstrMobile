@@ -142,9 +142,9 @@ fun KnowledgeScreen(
                 runCatching {
                     val name = queryName(context, uri) ?: "document.txt"
                     val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: error("读不到文件内容")
-                    check(bytes.size <= 20 * 1024 * 1024) { "文件超过 20MB，手机上处理会很吃力" }
+                    // 边读边计数：先 readBytes() 再判断大小的话，用户选个 500MB 的 PDF
+                    // 会先把内存吃光，检查根本走不到。
+                    val bytes = readLimited(context, uri, MAX_UPLOAD_BYTES)
                     Triple(name, mime, bytes)
                 }
             }
@@ -535,4 +535,30 @@ private fun queryName(context: android.content.Context, uri: Uri): String? {
             if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
         }
     }.getOrNull()
+}
+
+/** 一次知识库上传的体积上限：再大就不是手机该干的事了。 */
+private const val MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+/**
+ * 带上限地读取文件。
+ *
+ * 不用 `readBytes()` 是因为它先把整个文件读进内存，再判断大小已经晚了——
+ * 低配机型上选个几百 MB 的文件会直接 OOM 闪退。
+ */
+private fun readLimited(context: android.content.Context, uri: Uri, limit: Int): ByteArray {
+    val input = context.contentResolver.openInputStream(uri) ?: error("读不到文件内容")
+    input.use { stream ->
+        val output = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val read = stream.read(buffer)
+            if (read < 0) break
+            if (output.size() + read > limit) {
+                error("文件超过 ${limit / 1024 / 1024}MB，手机上处理会很吃力")
+            }
+            output.write(buffer, 0, read)
+        }
+        return output.toByteArray()
+    }
 }

@@ -62,7 +62,19 @@ object NapCatConfigReader {
         val log = File(paths.rootfsDir, "root/napcat.log")
         if (!log.exists()) return null
 
-        val tail = runCatching { log.readText().takeLast(200_000) }.getOrNull() ?: return null
+        // 只读尾部 64KB：日志可能几百 MB，readText() 会先把它整个读进内存。
+        val tail = runCatching {
+            val length = log.length()
+            if (length <= 0) return null
+            val size = minOf(length, 64L * 1024).toInt()
+            val buffer = ByteArray(size)
+            java.io.RandomAccessFile(log, "r").use { raf ->
+                raf.seek(length - size)
+                raf.readFully(buffer)
+            }
+            String(buffer, Charsets.UTF_8)
+        }.getOrNull() ?: return null
+
         val patterns = listOf(
             Regex("""[Tt]oken["'\s:=]+([A-Za-z0-9_\-]{8,})"""),
             Regex("""WebUI[^\n]*?([A-Za-z0-9_\-]{16,})"""),

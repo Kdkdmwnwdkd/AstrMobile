@@ -1,13 +1,19 @@
 package com.astrmobile.ui.webui
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -53,6 +59,17 @@ fun WebUiScreen(
     var loading by remember { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var canGoBack by remember { mutableStateOf(false) }
+
+    // 网页里的 <input type="file">（知识库上传、插件安装选包）必须由宿主接管，
+    // 否则点了没任何反应——这正是之前"兜底入口"名不副实的原因。
+    var fileCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val picked = result.data?.data?.let { arrayOf(it) } ?: emptyArray()
+        fileCallback?.onReceiveValue(picked)
+        fileCallback = null
+    }
 
     BackHandler(enabled = canGoBack) {
         webViewRef?.goBack()
@@ -106,11 +123,11 @@ fun WebUiScreen(
             }
         }
 
-        // NapCat WebUI 需要 token，默认随机生成并打印在容器日志里。
-        // 不提示的话用户会卡在登录页不知道该填什么。
+        // NapCat WebUI 的口令由 start.sh 固定成 astrmobile（首次登录后请自行修改），
+        // 不需要再去日志里翻随机串。
         if (currentPort == napcatPort) {
             Text(
-                text = "首次登录需 Token：在「实时日志」里搜索 webui 或 token",
+                text = "Token 默认 astrmobile；登录后建议在设置里改掉",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 fontFamily = FontFamily.Monospace,
@@ -159,6 +176,27 @@ fun WebUiScreen(
                             cacheMode = WebSettings.LOAD_DEFAULT
                         }
                         isVerticalScrollBarEnabled = true
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onShowFileChooser(
+                                view: WebView?,
+                                filePathCallback: ValueCallback<Array<Uri>>?,
+                                fileChooserParams: FileChooserParams?,
+                            ): Boolean {
+                                fileCallback?.onReceiveValue(null)
+                                fileCallback = filePathCallback
+                                val intent = runCatching { fileChooserParams?.createIntent() }.getOrNull()
+                                    ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                                        type = "*/*"
+                                        addCategory(Intent.CATEGORY_OPENABLE)
+                                    }
+                                val launched = runCatching { filePicker.launch(intent) }.isSuccess
+                                if (!launched) {
+                                    filePathCallback?.onReceiveValue(null)
+                                    fileCallback = null
+                                }
+                                return launched
+                            }
+                        }
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                 loading = true

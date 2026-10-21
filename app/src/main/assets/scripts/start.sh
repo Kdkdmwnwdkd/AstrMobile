@@ -264,6 +264,14 @@ PY
 fi
 
 # ------------------------------------------------------------------ NapCat
+# napcat.log 不会自己轮转：长期运行后动辄几百 MB，读它的时候手机会卡死。
+# 超过 5MB 就只保留尾部 1MB（只用于排错，不需要完整历史）。
+if [ -f /root/napcat.log ] && [ "$(stat -c%s /root/napcat.log 2>/dev/null || echo 0)" -gt 5242880 ]; then
+  tail -c 1048576 /root/napcat.log > /root/napcat.log.tmp 2>/dev/null \
+    && mv /root/napcat.log.tmp /root/napcat.log
+  echo "[start] napcat.log 已轮转（保留尾部 1MB）"
+fi
+
 if [ -f /root/launcher.sh ]; then
   echo "[start] 启动 NapCat"
   nohup bash /root/launcher.sh > /root/napcat.log 2>&1 &

@@ -376,7 +376,8 @@ fun QrCodeScreen(
 
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "扫码只是登录 QQ。登录后还需要在 AstrBot 后台添加 aiocqhttp 通信接口（ws://127.0.0.1:6199/ws）。",
+            text = "扫码只是登录 QQ。通信接口（aiocqhttp，ws://127.0.0.1:6199/ws）已由 App 自动配置好，" +
+                "不用再去后台手动添加；扫码成功后等十几秒会自动连上。",
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 17.sp,
