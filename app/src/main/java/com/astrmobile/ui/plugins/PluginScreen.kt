@@ -32,6 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -75,6 +76,14 @@ fun PluginScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
     var needRestart by remember { mutableStateOf(false) }
+
+    // 装完/删完插件，用户多半直接返回，不会去点"重启"。
+    // 离开页面时替他重启，避免"装了但没生效"。连续装多个只会重启一次。
+    DisposableEffect(Unit) {
+        onDispose {
+            if (needRestart) onRestart()
+        }
+    }
 
     fun refreshInstalled() {
         scope.launch { installed = viewModel.listInstalledPlugins() }
@@ -179,8 +188,11 @@ fun PluginScreen(
             bannerText != null -> Banner(
                 bannerText,
                 isError = isError,
-                action = if (needRestart) "重启生效" else null,
-                onAction = onRestart,
+                action = if (needRestart) "立即重启" else null,
+                onAction = {
+                    needRestart = false
+                    onRestart()
+                },
             )
             bannerError != null -> Banner(bannerError, isError = true)
         }
@@ -265,7 +277,8 @@ fun PluginScreen(
         }
 
         Text(
-            text = "插件装在容器里，重启后生效。首次启动可能会自动安装 Python 依赖，稍慢属正常。",
+            text = "插件装在容器里，返回上一页会自动重启容器生效（也可点上面「立即重启」）。" +
+                "首次启动可能自动装 Python 依赖，稍慢属正常。",
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),

@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +72,15 @@ fun PersonaScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(false) }
+    var pendingRestart by remember { mutableStateOf(false) }
+
+    // 人格只在 AstrBot 启动时加载一次，保存进库后必须重启容器才生效。
+    // 用户保存完通常直接返回，所以离开页面时替他重启，避免"保存了但没变"。
+    DisposableEffect(Unit) {
+        onDispose {
+            if (pendingRestart) onRestart()
+        }
+    }
 
     suspend fun ensureSession(force: Boolean = false): String? {
         if (!force) cookie?.let { return it }
@@ -99,9 +109,10 @@ fun PersonaScreen(
         viewModel.listPersonas(session).fold(
             onSuccess = { list ->
                 personas = list
-                // 默认选中第一条，让用户一点进来就能改
+                // AstrBot 的默认人格 id 固定是 "default"，优先改它；
+                // 否则用户自建了别的人格时，改半天改的不是实际生效的那条。
                 if (selected == null) {
-                    list.firstOrNull()?.let {
+                    (list.firstOrNull { it.id == "default" } ?: list.firstOrNull())?.let {
                         selected = it
                         draft = it.systemPrompt
                     }
@@ -266,7 +277,8 @@ fun PersonaScreen(
                             onSuccess = {
                                 isError = false
                                 saved = true
-                                message = "已保存，重启后生效"
+                                pendingRestart = true
+                                message = "已保存。返回上一页会自动重启容器，约 30 秒后生效。"
                                 selected = null
                                 cookie = null
                                 loading = true
@@ -311,8 +323,17 @@ fun PersonaScreen(
             }
 
             if (saved) {
-                TextButton(onClick = onRestart, modifier = Modifier.fillMaxWidth()) {
-                    Text("立即重启使配置生效")
+                Button(
+                    onClick = {
+                        pendingRestart = false
+                        onRestart()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text("立即重启生效（不点就返回时自动重启）")
                 }
             }
         }

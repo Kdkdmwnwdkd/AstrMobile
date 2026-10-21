@@ -27,6 +27,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -71,6 +72,15 @@ fun PluginConfigScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(false) }
+    var pendingRestart by remember { mutableStateOf(false) }
+
+    // 插件参数由插件在启动时读取，改完必须重启容器才生效。
+    // 用户保存完通常直接返回，这里替他重启一次。
+    DisposableEffect(Unit) {
+        onDispose {
+            if (pendingRestart) onRestart()
+        }
+    }
 
     LaunchedEffect(pluginId) {
         val cookie = viewModel.loginAstrBot().getOrElse {
@@ -213,7 +223,8 @@ fun PluginConfigScreen(
                                 onSuccess = {
                                     isError = false
                                     saved = true
-                                    message = "已保存，重启后生效"
+                                    pendingRestart = true
+                                    message = "已保存。返回上一页会自动重启容器，约 30 秒后生效。"
                                 },
                                 onFailure = {
                                     isError = true
@@ -241,8 +252,13 @@ fun PluginConfigScreen(
                 }
 
                 if (saved) {
-                    TextButton(onClick = onRestart) {
-                        Text("立即重启使配置生效")
+                    TextButton(
+                        onClick = {
+                            pendingRestart = false
+                            onRestart()
+                        },
+                    ) {
+                        Text("立即重启生效（不点就返回时自动重启）")
                     }
                 }
 
