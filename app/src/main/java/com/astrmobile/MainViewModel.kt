@@ -436,8 +436,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Result.success(Unit)
     }
 
-    suspend fun listConversations(cookie: String): Result<List<ConversationSummary>> =
-        withContext(Dispatchers.IO) { AstrBotApi().listConversations(cookie) }
+    suspend fun listConversations(
+        cookie: String,
+        page: Int = 1,
+    ): Result<List<ConversationSummary>> =
+        withContext(Dispatchers.IO) { AstrBotApi().listConversations(cookie, page = page) }
 
     suspend fun loadPluginConfig(
         cookie: String,

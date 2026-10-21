@@ -148,10 +148,11 @@ class AstrBotApi(private val port: Int = 6185) {
     suspend fun listConversations(
         cookie: String,
         pageSize: Int = 20,
+        page: Int = 1,
     ): Result<List<ConversationSummary>> = withContext(Dispatchers.IO) {
         val response = request(
             "GET",
-            "/conversations?page=1&page_size=$pageSize&sort_by=updated_at&sort_order=desc&include_history=true",
+            "/conversations?page=$page&page_size=$pageSize&sort_by=updated_at&sort_order=desc&include_history=true",
             null,
             cookie,
         ) ?: return@withContext Result.failure(IllegalStateException("读取对话失败：无响应"))

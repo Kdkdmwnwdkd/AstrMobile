@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,9 @@ import androidx.compose.ui.unit.sp
 import com.astrmobile.MainViewModel
 import com.astrmobile.core.container.ConversationSummary
 import com.astrmobile.ui.components.HintText
+import kotlinx.coroutines.launch
+
+private const val PAGE_SIZE = 20
 
 /**
  * 对话记录。
@@ -57,17 +61,23 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     var message by remember { mutableStateOf<String?>(null) }
     var expanded by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableIntStateOf(0) }
+    var page by remember { mutableIntStateOf(1) }
+    var hasMore by remember { mutableStateOf(false) }
+    var loadingMore by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(reloadKey) {
         loading = true
+        page = 1
         val cookie = viewModel.loginAstrBot().getOrElse {
             message = "${it.message}（可先在「人格设定」页填入改过的后台密码）"
             loading = false
             return@LaunchedEffect
         }
-        viewModel.listConversations(cookie).fold(
+        viewModel.listConversations(cookie, page = 1).fold(
             onSuccess = {
                 conversations = it
+                hasMore = it.size >= PAGE_SIZE
                 message = null
                 loading = false
             },
@@ -133,15 +143,58 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 )
             }
 
-            else -> conversations.forEach { conversation ->
-                ConversationCard(
-                    conversation = conversation,
-                    expanded = expanded == conversation.cid,
-                    onToggle = {
-                        expanded = if (expanded == conversation.cid) null else conversation.cid
-                    },
-                )
-                Spacer(Modifier.height(8.dp))
+            else -> {
+                conversations.forEach { conversation ->
+                    ConversationCard(
+                        conversation = conversation,
+                        expanded = expanded == conversation.cid,
+                        onToggle = {
+                            expanded = if (expanded == conversation.cid) null else conversation.cid
+                        },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                if (hasMore) {
+                    TextButton(
+                        onClick = {
+                            if (!loadingMore) {
+                                loadingMore = true
+                                scope.launch {
+                                    val cookie = viewModel.loginAstrBot().getOrNull()
+                                    if (cookie == null) {
+                                        loadingMore = false
+                                        return@launch
+                                    }
+                                    viewModel.listConversations(cookie, page + 1).fold(
+                                        onSuccess = { list ->
+                                            page += 1
+                                            // 分页期间可能有新会话插到前面，按 cid 去重
+                                            conversations =
+                                                (conversations + list).distinctBy { it.cid }
+                                            hasMore = list.size >= PAGE_SIZE
+                                        },
+                                        onFailure = { message = it.message },
+                                    )
+                                    loadingMore = false
+                                }
+                            }
+                        },
+                        enabled = !loadingMore,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (loadingMore) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("正在加载…")
+                        } else {
+                            Text("加载更多")
+                        }
+                    }
+                }
             }
         }
 
