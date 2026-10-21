@@ -169,11 +169,18 @@ docker compose restart astrbot    # 改完配置重启
 docker compose pull && docker compose up -d   # 升级
 ```
 
-备份就是打包 `./data` 目录（AstrBot 的全部配置、插件、对话记录都在里面）：
+备份就是打包 `./data` 目录（AstrBot 的全部配置、插件、对话记录都在里面）。别手敲 tar，用现成的：
 
 ```bash
-tar czf astrbot-backup-$(date +%F).tar.gz data
+./backup.sh                  # 备份到 ./bot/backups，自动只留 7 天
+./backup.sh /mnt/nas/bot     # 备份到挂载的网盘/NAS
+
+# 每天凌晨 4 点自动备份
+crontab -e
+0 4 * * * /home/你的用户名/deploy/backup.sh >> /home/你的用户名/deploy/backup.log 2>&1
 ```
+
+恢复到另一台机器（或手机本地容器）：拷 `astrbot-xxx.tar.gz` 过去，解压覆盖 `data` 目录，重启容器即可。
 
 ---
 
