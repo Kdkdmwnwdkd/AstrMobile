@@ -1,0 +1,47 @@
+# 外部保活：GitHub Actions 每 5 分钟戳一次你的服务器
+#
+# 为什么不用服务器上的 cron：实例被停之后 cron 也停了，自己叫不醒自己。
+#
+# 用法：
+#   1. 仓库 Settings → Secrets and variables → Actions → New repository secret
+#      名字填 KEEPALIVE_URL，值填你的服务器地址，例如：
+#        http://你的公网IP:6185/
+#        https://bot.你的域名.com/
+#   2. 到 Actions 页面手动 Run 一次，看日志里是不是 HTTP 200
+#
+# 注意：
+#   - GitHub 的定时任务最小间隔 5 分钟，高峰期会延迟到十几分钟，
+#     所以平台如果 30 分钟才停，这个间隔是够的，但别指望精准。
+#   - 仓库连续 60 天没有任何提交，GitHub 会自动停用 scheduled workflow。
+#   - 只暴露 6185（AstrBot 有登录密码），绝对不要暴露 6099。
+
+name: keepalive
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping server
+        env:
+          URL: ${{ secrets.KEEPALIVE_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "没有配置 KEEPALIVE_URL，跳过"
+            exit 0
+          fi
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$URL" 2>/dev/null) || code=000
+            echo "第 $i 次：HTTP $code"
+            if [ "$code" != "000" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "三次都没通，实例可能被停了或者地址不对"
+          exit 1
