@@ -39,6 +39,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/** 保存模型后的结果：区分“已经生效”和“还要重启”。 */
+data class ModelSaveOutcome(
+    val needsRestart: Boolean,
+    val message: String,
+)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appContainer = (application as AstrMobileApp).container
@@ -142,18 +148,91 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         runCatching { NapCatConfigReader.readToken(appContainer.paths) }.getOrNull()
     }
 
+    /**
+     * 读模型配置。
+     *
+     * 优先问 AstrBot 自己（`/api/v1/providers`）：这是运行时真实生效的那份，
+     * 已经过 provider_sources 合并，不会出现“文件里有、实际没加载”的假象。
+     * 容器没起、后台密码改过、老版本没有该接口时，回退到直接读配置文件。
+     */
     suspend fun readModels(): List<ConfiguredModel> = withContext(Dispatchers.IO) {
-        runCatching { ModelConfigRepository.read(appContainer.paths) }.getOrDefault(emptyList())
+        readRemoteModels() ?: runCatching {
+            ModelConfigRepository.read(appContainer.paths)
+        }.getOrDefault(emptyList())
     }
 
-    /** 保存模型配置。写入的是容器内的 AstrBot 配置，重启容器后生效。 */
-    suspend fun saveModel(apiBase: String, apiKey: String, model: String): Result<Unit> =
+    /** 读不到（未运行/未登录）时返回 null，交给调用方回退。 */
+    private suspend fun readRemoteModels(): List<ConfiguredModel>? {
+        val cookie = loginAstrBot().getOrNull() ?: return null
+        val providers = AstrBotApi().listProviders(cookie).getOrNull() ?: return null
+        return providers
+            .filter { it.providerType.isBlank() || it.providerType == "chat_completion" }
+            // 自己配的那条排最前，界面默认展示它
+            .sortedBy { if (it.id == ModelConfigRepository.PROVIDER_ID) 0 else 1 }
+            .map {
+                ConfiguredModel(
+                    id = it.id,
+                    apiBase = it.apiBase,
+                    model = it.model,
+                    keyHint = it.keyHint,
+                    enabled = it.enabled,
+                )
+            }
+    }
+
+    /**
+     * 保存模型：先走 AstrBot 的 provider 接口（热生效、由它自己落盘），
+     * 失败才退回“写配置文件 + 提示重启”。
+     */
+    suspend fun saveModel(apiBase: String, apiKey: String, model: String): Result<ModelSaveOutcome> =
         withContext(Dispatchers.IO) {
+            val cookie = loginAstrBot().getOrNull()
+            if (cookie != null) {
+                val saved = AstrBotApi().saveChatProvider(
+                    cookie = cookie,
+                    id = ModelConfigRepository.PROVIDER_ID,
+                    apiBase = apiBase,
+                    apiKey = apiKey,
+                    model = model,
+                )
+                if (saved.isSuccess) {
+                    return@withContext Result.success(ModelSaveOutcome(false, "已保存，已经立即生效"))
+                }
+            }
+
             ModelConfigRepository.save(appContainer.paths, apiBase, apiKey, model)
+                .map { ModelSaveOutcome(true, "配置已写入，重启容器后生效") }
         }
 
-    suspend fun removeModel(): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun removeModel(): Result<ModelSaveOutcome> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrNull()
+        if (cookie != null) {
+            val removed = AstrBotApi().deleteProvider(cookie, ModelConfigRepository.PROVIDER_ID)
+            if (removed.isSuccess) {
+                return@withContext Result.success(ModelSaveOutcome(false, "已删除，已经立即生效"))
+            }
+        }
         ModelConfigRepository.remove(appContainer.paths)
+            .map { ModelSaveOutcome(true, "已从配置中移除，重启后生效") }
+    }
+
+    /** 真正发一次请求验证 Key 能不能用——这是“到底生效没有”的唯一可靠答案。 */
+    suspend fun testModel(): Result<String> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrNull()
+            ?: return@withContext Result.failure(
+                IllegalStateException(
+                    "登录 AstrBot 后台失败。容器在运行吗？如果改过后台密码，先去「人格设定」里填一次。",
+                ),
+            )
+        val providers = AstrBotApi().listProviders(cookie).getOrElse {
+            return@withContext Result.failure(it)
+        }
+        if (providers.none { it.id == ModelConfigRepository.PROVIDER_ID }) {
+            return@withContext Result.failure(
+                IllegalStateException("还没有保存模型，先点一次「保存」"),
+            )
+        }
+        AstrBotApi().testProvider(cookie, ModelConfigRepository.PROVIDER_ID)
     }
 
     // ---------------------------------------------------------------- 插件
@@ -237,11 +316,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         BackupRepository.list(appContainer.paths)
     }
 
+    /**
+     * 恢复备份。
+     *
+     * 必须先停容器：恢复开头会把 `data` 改名成 `data.previous`，而进程持有的
+     * 是旧目录的 inode——容器还在跑时 rename 一样会成功，AstrBot 继续往旧目录写，
+     * 结果就是“提示恢复成功，但聊天记录和插件还是旧的”。
+     */
     suspend fun restoreBackup(
         file: java.io.File,
         onProgress: (Int, Int) -> Unit,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        BackupRepository.restore(appContainer.paths, file, onProgress)
+        controller.stop()
+        val result = BackupRepository.restore(appContainer.paths, file, onProgress)
+        // 无论成败都把容器拉起来，省得用户再点一次
+        runCatching { controller.start() }
+        result
     }
 
     fun deleteBackup(file: java.io.File): Boolean = BackupRepository.delete(file)

@@ -84,6 +84,8 @@ fun ModelScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(false) }
+    var needsRestart by remember { mutableStateOf(false) }
+    var testing by remember { mutableStateOf(false) }
 
     // 已经配过的话，把接口地址和模型名回填，用户换 Key 时不用重填全部。
     LaunchedEffect(models) {
@@ -257,10 +259,11 @@ fun ModelScreen(
                         val result = viewModel.saveModel(apiBase, apiKey, modelName)
                         busy = false
                         result.fold(
-                            onSuccess = {
+                            onSuccess = { outcome ->
                                 saved = true
                                 isError = false
-                                message = "已保存。配置要重启后才生效。"
+                                needsRestart = outcome.needsRestart
+                                message = outcome.message
                                 apiKey = ""
                                 reloadKey++
                             },
@@ -302,11 +305,43 @@ fun ModelScreen(
                 )
             }
 
-            if (saved) {
+            if (saved && needsRestart) {
                 Spacer(Modifier.height(4.dp))
                 TextButton(onClick = onRestart, modifier = Modifier.fillMaxWidth()) {
                     Text("立即重启使配置生效")
                 }
+            }
+
+            // 测试连接：直接让 AstrBot 拿这个 Key 发一次真实请求，
+            // 这是“到底生效没有”的唯一可靠答案，比看状态卡猜有用。
+            Spacer(Modifier.height(2.dp))
+            TextButton(
+                onClick = {
+                    testing = true
+                    message = null
+                    scope.launch {
+                        val result = viewModel.testModel()
+                        testing = false
+                        result.fold(
+                            onSuccess = {
+                                isError = false
+                                message = it
+                            },
+                            onFailure = {
+                                isError = true
+                                message = it.message ?: "测试失败"
+                            },
+                        )
+                    }
+                },
+                enabled = !testing && (current != null || saved),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                if (testing) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.size(8.dp))
+                }
+                Text(if (testing) "正在测试连接…" else "测试连接")
             }
         }
 
@@ -320,10 +355,11 @@ fun ModelScreen(
                     onClick = {
                         scope.launch {
                             viewModel.removeModel().fold(
-                                onSuccess = {
+                                onSuccess = { outcome ->
                                     reloadKey++
                                     isError = false
-                                    message = "已移除，重启后生效"
+                                    saved = false
+                                    message = outcome.message
                                 },
                                 onFailure = {
                                     isError = true

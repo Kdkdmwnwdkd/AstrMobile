@@ -300,7 +300,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             text = {
                 Text(
                     "将用「${file.name}」覆盖当前的配置、插件和会话数据。\n\n" +
-                        "当前数据会自动留一份，恢复失败会还原。恢复完成后需要重启容器。",
+                        "恢复前会先停止机器人，完成后自动重新启动。当前数据会自动留一份，恢复失败会还原。",
                     lineHeight = 20.sp,
                 )
             },
@@ -323,7 +323,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         result.fold(
                             onSuccess = {
                                 isError = false
-                                message = "恢复完成，请重启容器使配置生效"
+                                message = "恢复完成，容器已重新启动"
                             },
                             onFailure = {
                                 isError = true

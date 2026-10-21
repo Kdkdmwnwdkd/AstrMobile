@@ -367,6 +367,153 @@ class AstrBotApi(private val port: Int = 6185) {
         return items
     }
 
+    // ---------------------------------------------------------------- 服务提供商
+    //
+    // 为什么不再直接改 cmd_config.json：
+    // 1. AstrBot 启动时把配置读进内存，运行中任何一次 save_config 都会用内存副本
+    //    全量覆盖文件——App 刚写进去的 provider 就这么没了；
+    // 2. 4.29 起 provider 被拆成 provider + provider_sources 两层，结构随版本变，
+    //    直接拼 JSON 迟早对不上；
+    // 3. 直接写文件必须重启才生效，用户点完"保存"看到的是旧状态。
+    // 走 /api/v1/providers 由 AstrBot 自己落盘并热加载，三个问题一起消失。
+
+    /** AstrBot 里真实存在的服务提供商（已经过 provider_sources 合并）。 */
+    data class RemoteProvider(
+        val id: String,
+        val apiBase: String,
+        val model: String,
+        val keyHint: String,
+        val enabled: Boolean,
+        val providerType: String,
+    )
+
+    suspend fun listProviders(cookie: String): Result<List<RemoteProvider>> = withContext(Dispatchers.IO) {
+        val response = request("GET", "/providers", null, cookie)
+            ?: return@withContext Result.failure(IllegalStateException("读取模型列表失败：AstrBot 没有响应"))
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "读取模型列表失败（HTTP ${response.code}）" }),
+            )
+        }
+
+        val array = (response.data as? JSONObject)?.optJSONArray("providers") ?: JSONArray()
+        val items = buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val id = item.optString("id")
+                if (id.isBlank()) continue
+                add(
+                    RemoteProvider(
+                        id = id,
+                        apiBase = item.optString("api_base"),
+                        model = item.optString("model"),
+                        keyHint = maskKey(firstKey(item)),
+                        enabled = item.optBoolean("enable", true),
+                        providerType = item.optString("provider_type"),
+                    ),
+                )
+            }
+        }
+        Result.success(items)
+    }
+
+    /**
+     * 写入（或替换）一个 OpenAI 兼容的对话模型。
+     *
+     * 先删同 id 的旧配置再新建：旧配置可能是 4.29 之前写进 `provider` 的扁平结构，
+     * 也可能是拆分后的 `provider + provider_sources`。重建一次能保证落到 AstrBot
+     * 当前版本认可的结构上，不会留下混合结构被下一次迁移弄丢。
+     * 删建之间只有毫秒级空窗，且 id 是本 App 独占的。
+     */
+    suspend fun saveChatProvider(
+        cookie: String,
+        id: String,
+        apiBase: String,
+        apiKey: String,
+        model: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        // 旧配置可能不存在，删除失败不算错误
+        request("DELETE", "/providers/by-id?provider_id=${encode(id)}", null, cookie)
+
+        val config = JSONObject()
+            .put("id", id)
+            .put("type", "openai_chat_completion")
+            .put("provider", "openai")
+            .put("provider_type", "chat_completion")
+            .put("api_base", apiBase.trim())
+            .put("key", JSONArray().put(apiKey.trim()))
+            .put("model", model.trim())
+            .put("enable", true)
+
+        val body = JSONObject().put("config", config).toString()
+        val response = request("POST", "/providers", body, cookie)
+            ?: return@withContext Result.failure(
+                IllegalStateException("保存失败：AstrBot 没有响应，可能还在启动中"),
+            )
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "保存失败（HTTP ${response.code}）" }),
+            )
+        }
+        Result.success(Unit)
+    }
+
+    /** 真正发一次请求验证 Key 可用，返回可读结论。 */
+    suspend fun testProvider(cookie: String, id: String): Result<String> = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("provider_id", id).toString()
+        val response = request("POST", "/providers/test", body, cookie)
+            ?: return@withContext Result.failure(IllegalStateException("测试失败：AstrBot 没有响应"))
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "测试失败（HTTP ${response.code}）" }),
+            )
+        }
+
+        val data = response.data as? JSONObject
+            ?: return@withContext Result.failure(IllegalStateException("测试返回格式异常"))
+        val status = data.optString("status")
+        val error = data.optString("error").ifBlank {
+            data.optString("message")
+        }
+        val modelName = data.optString("model")
+
+        if (status == "available") {
+            Result.success("连接成功，${modelName.ifBlank { "模型" }}可用")
+        } else {
+            Result.failure(
+                IllegalStateException(error.ifBlank { "模型不可用（$status）" }),
+            )
+        }
+    }
+
+    suspend fun deleteProvider(cookie: String, id: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val response = request("DELETE", "/providers/by-id?provider_id=${encode(id)}", null, cookie)
+            ?: return@withContext Result.failure(IllegalStateException("删除失败：AstrBot 没有响应"))
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "删除失败（HTTP ${response.code}）" }),
+            )
+        }
+        Result.success(Unit)
+    }
+
+    private fun encode(value: String): String = java.net.URLEncoder.encode(value, "UTF-8")
+
+    private fun firstKey(obj: JSONObject): String {
+        val array = obj.optJSONArray("key") ?: return obj.optString("key")
+        return array.optString(0)
+    }
+
+    private fun maskKey(key: String): String {
+        if (key.isBlank()) return ""
+        if (key.length <= 8) return "****"
+        return key.take(4) + "****" + key.takeLast(4)
+    }
+
     // ---------------------------------------------------------------- 传输
 
     private class ApiResponse(

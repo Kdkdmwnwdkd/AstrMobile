@@ -58,6 +58,9 @@ jobs:
           ls "$SDK_ROOT/build-tools" || true
           echo "ANDROID_HOME=$ANDROID_HOME"
 
+      - name: Unit tests
+        run: ./gradlew test --no-daemon --stacktrace
+
       - name: Fetch bundled Ubuntu rootfs
         run: |
           set -euo pipefail

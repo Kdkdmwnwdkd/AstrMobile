@@ -57,7 +57,9 @@ enum class ModelPreset(
 object ModelConfigRepository {
 
     private const val CONFIG_RELATIVE_PATH = "root/data/cmd_config.json"
-    private const val PROVIDER_ID = "astrmobile_llm"
+
+    /** App 独占的 provider id：API 写入与文件回退都用它，避免动到用户自建的模型。 */
+    const val PROVIDER_ID = "astrmobile_llm"
     private const val SOURCE_SUFFIX = "_source"
 
     /** 新结构里 provider 只保留这些键，其余都归 provider_sources。 */

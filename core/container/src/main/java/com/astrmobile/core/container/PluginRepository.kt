@@ -51,6 +51,12 @@ object PluginRepository {
     private const val CACHE_FILE = "plugin_market.json"
     private const val CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000L
 
+    // 插件包是第三方代码，直接解压进容器执行。这里只做最基本的边界检查：
+    // 挡住超大包和 zip bomb，避免一个恶意仓库把手机存储塞满。
+    private const val MAX_PLUGIN_BYTES = 50L * 1024 * 1024
+    private const val MAX_UNZIPPED_BYTES = 200L * 1024 * 1024
+    private const val MAX_ENTRIES = 5_000
+
     private const val PLUGINS_RELATIVE = "root/data/plugins"
 
     // ---------------------------------------------------------------- 市场索引
@@ -241,8 +247,22 @@ object PluginRepository {
             connection.disconnect()
             return false
         }
+        if (connection.contentLengthLong > MAX_PLUGIN_BYTES) {
+            connection.disconnect()
+            error("插件包超过 ${MAX_PLUGIN_BYTES / 1024 / 1024}MB，已中止")
+        }
         connection.inputStream.use { input ->
-            FileOutputStream(target).use { output -> input.copyTo(output) }
+            FileOutputStream(target).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                var total = 0L
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    if (total > MAX_PLUGIN_BYTES) error("插件包超过 ${MAX_PLUGIN_BYTES / 1024 / 1024}MB，已中止")
+                    output.write(buffer, 0, read)
+                }
+            }
         }
         connection.disconnect()
         target.length() > 0
@@ -252,7 +272,11 @@ object PluginRepository {
         ZipInputStream(BufferedInputStream(zip.inputStream())).use { stream ->
             var entry = stream.nextEntry
             val rootPath = destination.canonicalPath
+            var entries = 0
+            var total = 0L
             while (entry != null) {
+                entries++
+                if (entries > MAX_ENTRIES) error("插件包内文件过多（>$MAX_ENTRIES），已中止")
                 val name = entry.name
                 if (name.isNotBlank()) {
                     val outFile = File(destination, name)
@@ -265,7 +289,18 @@ object PluginRepository {
                         outFile.mkdirs()
                     } else {
                         outFile.parentFile?.mkdirs()
-                        FileOutputStream(outFile).use { output -> stream.copyTo(output) }
+                        FileOutputStream(outFile).use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val read = stream.read(buffer)
+                                if (read < 0) break
+                                total += read
+                                if (total > MAX_UNZIPPED_BYTES) {
+                                    error("插件解压后超过 ${MAX_UNZIPPED_BYTES / 1024 / 1024}MB，已中止")
+                                }
+                                output.write(buffer, 0, read)
+                            }
+                        }
                     }
                 }
                 stream.closeEntry()
