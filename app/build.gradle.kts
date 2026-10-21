@@ -11,8 +11,8 @@ android {
         applicationId = "com.astrmobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 42
-        versionName = "0.16.2"
+        versionCode = 43
+        versionName = "0.17.0"
 
         ndk {
             abiFilters += "arm64-v8a"
@@ -97,6 +97,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // 屏幕文字识别：中文模型打包在 APK 里，不依赖 GMS，离线可用
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

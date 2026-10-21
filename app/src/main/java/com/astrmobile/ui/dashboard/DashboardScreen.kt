@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
@@ -83,6 +84,7 @@ fun DashboardScreen(
     onOpenDiagnostics: () -> Unit,
     onOpenBackup: () -> Unit,
     onOpenConversations: () -> Unit,
+    onOpenScreen: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -229,16 +231,6 @@ fun DashboardScreen(
             Spacer(Modifier.height(6.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onOpenConsole) {
-                    Icon(
-                        Icons.Rounded.Terminal,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text("实时日志", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
                 TextButton(
                     onClick = {
                         if (running?.astrbotReady == true) {
@@ -264,7 +256,7 @@ fun DashboardScreen(
 
         // ---------------------------------------------------------- 常用入口
         SectionCard(title = "常用") {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 QuickTile(
                     icon = Icons.Rounded.HealthAndSafety,
                     title = "自检",
@@ -273,7 +265,7 @@ fun DashboardScreen(
                 )
                 QuickTile(
                     icon = Icons.Rounded.QrCodeScanner,
-                    title = "扫码登录",
+                    title = "扫码",
                     modifier = Modifier.weight(1f),
                     onClick = {
                         if (running?.napcatReady == true) {
@@ -289,18 +281,18 @@ fun DashboardScreen(
                     modifier = Modifier.weight(1f),
                     onClick = onOpenPersona,
                 )
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 QuickTile(
                     icon = Icons.Rounded.MenuBook,
-                    title = "知识库",
+                    title = "知识",
                     modifier = Modifier.weight(1f),
                     onClick = onOpenKnowledge,
                 )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 QuickTile(
                     icon = Icons.Rounded.ChatBubbleOutline,
-                    title = "对话记录",
+                    title = "对话",
                     modifier = Modifier.weight(1f),
                     onClick = onOpenConversations,
                 )
@@ -309,6 +301,18 @@ fun DashboardScreen(
                     title = "备份",
                     modifier = Modifier.weight(1f),
                     onClick = onOpenBackup,
+                )
+                QuickTile(
+                    icon = Icons.Rounded.PhoneAndroid,
+                    title = "看屏",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenScreen,
+                )
+                QuickTile(
+                    icon = Icons.Rounded.Terminal,
+                    title = "日志",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenConsole,
                 )
             }
         }

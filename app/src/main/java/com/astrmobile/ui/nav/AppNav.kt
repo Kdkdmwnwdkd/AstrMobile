@@ -37,6 +37,7 @@ import com.astrmobile.ui.plugins.PluginConfigScreen
 import com.astrmobile.ui.plugins.PluginScreen
 import com.astrmobile.ui.onboarding.OnboardingScreen
 import com.astrmobile.ui.qrcode.QrCodeScreen
+import com.astrmobile.ui.screen.ScreenReaderScreen
 import com.astrmobile.ui.settings.SettingsScreen
 import com.astrmobile.ui.webui.WebUiScreen
 
@@ -53,6 +54,7 @@ object Routes {
     const val Diagnostics = "diagnostics"
     const val Backup = "backup"
     const val Conversations = "conversations"
+    const val ScreenReader = "screen"
     const val PluginConfig = "pluginconfig/{pluginId}"
 
     // 目录名理论上不含特殊字符，但导航参数必须编码，
@@ -162,6 +164,7 @@ fun AppNav(viewModel: MainViewModel) {
                     onOpenDiagnostics = { navController.navigate(Routes.Diagnostics) },
                     onOpenBackup = { navController.navigate(Routes.Backup) },
                     onOpenConversations = { navController.navigate(Routes.Conversations) },
+                    onOpenScreen = { navController.navigate(Routes.ScreenReader) },
                     onRepair = {
                         viewModel.prepareReinstall()
                         navController.navigate(Routes.Onboarding)
@@ -251,6 +254,13 @@ fun AppNav(viewModel: MainViewModel) {
 
             composable(Routes.Conversations) {
                 ConversationsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.ScreenReader) {
+                ScreenReaderScreen(
                     viewModel = viewModel,
                     onBack = { navController.popBackStack() },
                 )
