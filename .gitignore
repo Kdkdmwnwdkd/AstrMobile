@@ -10,3 +10,10 @@ build/
 .cxx
 app/src/main/assets/rootfs/*.xz
 !app/src/main/assets/rootfs/.gitkeep
+
+# 部署时由 .env.example 复制生成，含本机 UID，不入库
+deploy/*/.env
+deploy/*/data/
+deploy/*/ollama/
+deploy/bot/napcat/
+deploy/bot/ntqq/

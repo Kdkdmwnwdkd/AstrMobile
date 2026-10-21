@@ -1,0 +1,64 @@
+# AstrBot + NapCat，一台机器搞定
+#
+# 用法：
+#   cp .env.example .env      # 里面两个 UID/GID 必须改成当前用户
+#   docker compose up -d
+#   docker compose logs -f astrbot
+#
+# 两个容器共享 ./data，NapCat 用 MODE=astrbot 自动把反向 WS 指向 astrbot:6199。
+
+name: astrbot-server
+
+services:
+  astrbot:
+    image: soulter/astrbot:latest
+    container_name: astrbot
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data:/AstrBot/data
+    ports:
+      # 默认只绑本机：出门用 SSH 隧道或 Tailscale。别直接 0.0.0.0 开到公网。
+      - "${BIND_ADDR:-127.0.0.1}:6185:6185"
+    networks:
+      - astrbot-net
+    logging:
+      # 20G 的盘，AstrBot 日志几天就能写满，必须限死
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+    mem_limit: 2g
+
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    restart: unless-stopped
+    depends_on:
+      - astrbot
+    environment:
+      # 必须是宿主机当前用户，否则容器写不进 ./napcat/config
+      NAPCAT_UID: ${NAPCAT_UID:-1000}
+      NAPCAT_GID: ${NAPCAT_GID:-1000}
+      MODE: astrbot
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./data:/AstrBot/data
+      - ./napcat/config:/app/napcat/config
+      - ./ntqq:/app/.config/QQ
+    ports:
+      # 6099 是 NapCat 的 WebUI，能直接操作 QQ 账号，尤其不能对公网开放
+      - "${BIND_ADDR:-127.0.0.1}:6099:6099"
+    networks:
+      - astrbot-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+    mem_limit: 3g
+
+networks:
+  astrbot-net:
+    driver: bridge
