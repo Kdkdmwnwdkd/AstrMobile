@@ -32,7 +32,7 @@ dependencies {
     implementation(project(":core:common"))
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("org.apache.commons:commons-compress:1.26.1")
+    implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("org.tukaani:xz:1.9")
     // NapCat 只给二维码内容（登录链接）不给图片，得本地画码
     implementation("com.google.zxing:core:3.5.3")
