@@ -150,6 +150,13 @@ object ModelConfigRepository {
         root.put("provider", providers)
         root.put("provider_sources", sources)
         file.writeText(root.toString(2))
+
+        // 写完立刻按「读」的路径回验一遍。结构一旦对不上（AstrBot 又改结构了），
+        // 这里当场报错，而不是让用户下次进页面才发现「又空了」。
+        val written = read(paths).firstOrNull { it.id == PROVIDER_ID }
+        check(written != null && written.keyHint.isNotBlank()) {
+            "配置写进去了但读不回来，可能是 AstrBot 版本换了配置结构"
+        }
     }
 
     fun remove(paths: ContainerPaths): Result<Unit> = runCatching {
