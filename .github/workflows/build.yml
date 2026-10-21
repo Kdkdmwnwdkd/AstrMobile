@@ -3,6 +3,13 @@ name: Build APK
 on:
   push:
     branches: [ main ]
+    # 纯文档/协作配置的提交不重新打包，避免同一版本号被反复覆盖发布
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.editorconfig'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/dependabot.yml'
   workflow_dispatch:
 
 concurrency:
@@ -85,10 +92,14 @@ jobs:
           echo "构建版本：$NAME ($CODE)"
 
       - name: Verify APK
+        id: apk
         run: |
+          set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
           ls -lh "$APK"
           "$ANDROID_HOME"/build-tools/34.0.0/apksigner verify --print-certs "$APK"
+          echo "sha=$(sha256sum "$APK" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c%s "$APK")" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -104,17 +115,28 @@ jobs:
           tag_name: latest
           name: AstrMobile latest
           body: |
-            **版本 ${{ steps.ver.outputs.name }}（versionCode ${{ steps.ver.outputs.code }}）**
-            构建于 ${{ github.event.head_commit.timestamp || github.run_started_at }}
+            ## 版本 ${{ steps.ver.outputs.name }}（versionCode ${{ steps.ver.outputs.code }}）
 
-            自动构建的 debug 包。
+            自动构建的 debug 包，构建于 ${{ github.event.head_commit.timestamp || github.run_started_at }}。
 
-            - 架构：arm64-v8a
-            - 最低系统：Android 8.0 (API 26)
-            - 每次推送到 main 自动更新
-            - 后台与 NapCat WebUI 仅监听 127.0.0.1
+            ### 安装
 
-            首次安装需联网 10–40 分钟，详见仓库 README。
+            - 架构：`arm64-v8a`，最低 Android 8.0（API 26）
+            - 覆盖安装不会丢数据（仓库内固定 debug keystore）
+            - 首次安装需联网 10–40 分钟
+
+            ### 校验
+
+            ```
+            SHA-256: ${{ steps.apk.outputs.sha }}
+            大小:    ${{ steps.apk.outputs.size }} 字节
+            ```
+
+            ### 说明
+
+            - AstrBot 后台（6185）与 NapCat WebUI（6099）仅监听 `127.0.0.1`；需从电脑访问时用 `adb forward tcp:6185 tcp:6185`
+            - 完整说明、已知限制与常见问题见 [README](https://github.com/Kdkdmwnwdkd/AstrMobile#readme)
+            - 变更记录见 [CHANGELOG](https://github.com/Kdkdmwnwdkd/AstrMobile/blob/main/CHANGELOG.md)
           files: app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
           make_latest: true

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 下载最新构建
+    url: https://github.com/Kdkdmwnwdkd/AstrMobile/releases/tag/latest
+    about: 每次推送到 main 会自动更新 APK，先确认你装的是最新一版
+  - name: 安装与使用说明
+    url: https://github.com/Kdkdmwnwdkd/AstrMobile#readme
+    about: 首次使用步骤、已知限制、常见问题都在 README 里
+  - name: AstrBot 本体的问题
+    url: https://github.com/AstrBotDevs/AstrBot/issues
+    about: 插件不兼容、模型接口报错、人格不生效等，多半要去上游提

@@ -1,0 +1,39 @@
+name: 功能建议
+description: 想要某个能力，或者觉得某处不好用
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        说清楚「你遇到什么麻烦」比「你想要什么按钮」更有用，前者往往有更简单的解法。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的问题
+      placeholder: 每次改完人格都要手动点重启，容易忘
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你希望的解法
+      placeholder: 保存后自动重启
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternative
+    attributes:
+      label: 有没有别的办法
+      description: 现在你是怎么绕过这个问题的
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 边界确认
+      options:
+        - label: 这个功能不依赖 ROOT、不绕过平台风控
+          required: true

@@ -1,0 +1,68 @@
+name: Bug 报告
+description: 安装、启动、模型、插件或 QQ 登录出问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提之前先看一眼「常见问题」和最近的 Issue，很多问题已经写过了。
+
+        请在「控制台 → 日志」里把相关的那几行贴上来，没有日志基本无法定位。
+
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: 设置页最下方可以看到，例如 0.17.1（versionCode 44）
+      placeholder: 0.17.1
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 手机型号与系统版本
+      placeholder: 小米 14 / HyperOS 1.0 / Android 14
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象
+      description: 发生了什么，界面上的原话是什么
+      placeholder: 点启动后状态一直停在「启动中」，日志最后一行是 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 App
+        2. 点「启动机器人」
+        3. 等待 30 秒
+        4. 状态仍是「启动中」
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      description: 控制台里复制，或从「日志」页导出文件后贴关键片段
+      render: text
+
+  - type: dropdown
+    id: tried
+    attributes:
+      label: 已经试过
+      multiple: true
+      options:
+        - 重启过容器
+        - 覆盖重装过 APK
+        - 清除过环境重装
+        - 换过模型 / 换过 Key
+        - 都没试过
