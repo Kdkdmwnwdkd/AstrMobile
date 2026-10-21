@@ -38,4 +38,6 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
+    // 单元测试跑在 JVM 上，android.jar 里的 org.json 只是空壳，得用真实实现
+    testImplementation("org.json:json:20240303")
 }

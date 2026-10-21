@@ -28,42 +28,67 @@ enum class ModelPreset(
 }
 
 /**
- * 读写 AstrBot 的对话模型配置（`data/cmd_config.json` 的 provider 数组）。
+ * 读写 AstrBot 的对话模型配置（`data/cmd_config.json`）。
  *
- * 字段依据 AstrBot 4.x：
- * - `type` 决定用哪个适配器，OpenAI 兼容统一是 `openai_chat_completion`
- * - `key` 是**数组**（支持多把密钥轮询）
- * - 模型名在**顶层 `model`**，不在 `model_config` 里（openai_source 直接读 provider["model"]）
+ * 这里有两种结构，取决于 AstrBot 启动过没有：
  *
- * 只维护一个固定 id 的条目，重复保存即覆盖，避免用户越点越多。
+ * **旧结构**（4.29 之前，或者我们刚写完还没启动）：
+ * ```json
+ * "provider": [{ "id": "...", "type": "openai_chat_completion",
+ *                "provider_type": "chat_completion",
+ *                "api_base": "...", "key": ["..."], "model": "..." }]
+ * ```
+ *
+ * **新结构**（4.29 的 `_migra_provider_to_source_structure` 迁移后）：
+ * ```json
+ * "provider":         [{ "id": "...", "provider_source_id": "..._source",
+ *                        "model": "...", "enable": true }]
+ * "provider_sources": [{ "id": "..._source", "type": "openai_chat_completion",
+ *                        "provider_type": "chat_completion",
+ *                        "api_base": "...", "key": ["..."] }]
+ * ```
+ *
+ * 迁移会把 `provider_type` / `api_base` / `key` 从 provider 里删掉。
+ * 之前只认旧结构，后果是：迁移后 provider 里读不到 `provider_type`，
+ * 条目被当成「不是对话模型」整条过滤 —— 界面永远显示「还没有配置模型」，
+ * 用户只能一遍遍重填。写入同理，往 provider 里塞 api_base/key 会被
+ * AstrBot 合并时当成覆盖值，表现为「保存成功但模型还在用旧 Key」。
  */
 object ModelConfigRepository {
 
     private const val CONFIG_RELATIVE_PATH = "root/data/cmd_config.json"
     private const val PROVIDER_ID = "astrmobile_llm"
+    private const val SOURCE_SUFFIX = "_source"
+
+    /** 新结构里 provider 只保留这些键，其余都归 provider_sources。 */
+    private val PROVIDER_ONLY_FIELDS = setOf(
+        "id", "provider_source_id", "model", "modalities", "custom_extra_body", "enable",
+    )
 
     fun read(paths: ContainerPaths): List<ConfiguredModel> {
-        val file = File(paths.rootfsDir, CONFIG_RELATIVE_PATH)
-        if (!file.exists()) return emptyList()
+        val root = readRoot(paths) ?: return emptyList()
+        val providers = root.optJSONArray("provider") ?: return emptyList()
+        val sources = root.optJSONArray("provider_sources")
 
-        return runCatching {
-            val array = JSONObject(file.readText()).optJSONArray("provider") ?: return emptyList()
-            buildList {
-                for (index in 0 until array.length()) {
-                    val item = array.optJSONObject(index) ?: continue
-                    if (item.optString("provider_type") != "chat_completion") continue
-                    add(
-                        ConfiguredModel(
-                            id = item.optString("id"),
-                            apiBase = item.optString("api_base"),
-                            model = item.optString("model"),
-                            keyHint = maskKey(item.optJSONArray("key")?.optString(0).orEmpty()),
-                            enabled = item.optBoolean("enable"),
-                        ),
-                    )
-                }
+        return buildList {
+            for (index in 0 until providers.length()) {
+                val provider = providers.optJSONObject(index) ?: continue
+                val source = findById(sources, provider.optString("provider_source_id"))
+                // 与 AstrBot 的合并顺序保持一致：source 打底，provider 覆盖
+                val type = provider.valueOr(source, "type")
+                val providerType = provider.valueOr(source, "provider_type")
+                if (!isChatProvider(type, providerType)) continue
+                add(
+                    ConfiguredModel(
+                        id = provider.optString("id"),
+                        apiBase = provider.valueOr(source, "api_base"),
+                        model = provider.optString("model").ifBlank { source?.optString("model").orEmpty() },
+                        keyHint = maskKey(firstKey(provider).ifBlank { firstKey(source) }),
+                        enabled = provider.optBoolean("enable", true),
+                    ),
+                )
             }
-        }.getOrDefault(emptyList())
+        }
     }
 
     fun save(
@@ -81,39 +106,49 @@ object ModelConfigRepository {
 
         val root = JSONObject(file.readText())
         val providers = root.optJSONArray("provider") ?: JSONArray()
+        val sources = root.optJSONArray("provider_sources") ?: JSONArray()
 
-        var updated = false
-        for (index in 0 until providers.length()) {
-            val item = providers.optJSONObject(index) ?: continue
-            if (item.optString("id") != PROVIDER_ID) continue
-            item.put("api_base", apiBase.trim())
-            item.put("key", JSONArray().put(apiKey.trim()))
-            item.put("model", model.trim())
-            item.put("enable", true)
-            updated = true
-            break
+        val provider = findById(providers, PROVIDER_ID) ?: JSONObject().apply {
+            put("id", PROVIDER_ID)
+            providers.put(this)
         }
 
-        if (!updated) {
-            providers.put(
-                JSONObject().apply {
-                    put("id", PROVIDER_ID)
-                    put("provider", "openai")
-                    put("type", "openai_chat_completion")
-                    put("provider_type", "chat_completion")
-                    put("enable", true)
-                    put("key", JSONArray().put(apiKey.trim()))
-                    put("api_base", apiBase.trim())
-                    put("model", model.trim())
-                    put("timeout", 120)
-                    put("proxy", "")
-                    put("custom_headers", JSONObject())
-                },
-            )
+        // 旧结构里的适配器信息要跟着搬进 source，否则迁移后 AstrBot 不知道用哪个适配器
+        val adapterType = provider.optString("type").ifBlank { "openai_chat_completion" }
+        val adapterProvider = provider.optString("provider").ifBlank { "openai" }
+
+        val sourceId = provider.optString("provider_source_id").ifBlank { PROVIDER_ID + SOURCE_SUFFIX }
+        val source = findById(sources, sourceId) ?: JSONObject().apply {
+            put("id", sourceId)
+            put("type", adapterType)
+            put("provider", adapterProvider)
+            put("provider_type", "chat_completion")
+            put("timeout", 120)
+            put("proxy", "")
+            put("custom_headers", JSONObject())
+            sources.put(this)
         }
+
+        // 关键一步：把 provider 里残留的 api_base / key / type 删干净。
+        // AstrBot 合并时 provider 会覆盖 provider_sources，留着旧值等于新 Key 白填。
+        provider.keys().asSequence()
+            .filter { it !in PROVIDER_ONLY_FIELDS }
+            .toList()
+            .forEach { provider.remove(it) }
+
+        provider.put("provider_source_id", sourceId)
+        provider.put("model", model.trim())
+        provider.put("enable", true)
+        if (!provider.has("modalities")) provider.put("modalities", JSONArray())
+        if (!provider.has("custom_extra_body")) provider.put("custom_extra_body", JSONObject())
+
+        source.put("api_base", apiBase.trim())
+        source.put("key", JSONArray().put(apiKey.trim()))
+        if (!source.has("type")) source.put("type", adapterType)
+        if (!source.has("provider_type")) source.put("provider_type", "chat_completion")
 
         root.put("provider", providers)
-        // 不重排、不补字段：AstrBot 启动时会自行补全缺失的默认值。
+        root.put("provider_sources", sources)
         file.writeText(root.toString(2))
     }
 
@@ -123,15 +158,63 @@ object ModelConfigRepository {
 
         val root = JSONObject(file.readText())
         val providers = root.optJSONArray("provider") ?: return@runCatching
-        val kept = JSONArray()
+        val sources = root.optJSONArray("provider_sources")
+
+        val droppedSources = mutableSetOf<String>()
+        val keptProviders = JSONArray()
         for (index in 0 until providers.length()) {
             val item = providers.optJSONObject(index) ?: continue
-            if (item.optString("id") == PROVIDER_ID) continue
-            kept.put(item)
+            if (item.optString("id") == PROVIDER_ID) {
+                item.optString("provider_source_id").takeIf { it.isNotBlank() }?.let(droppedSources::add)
+                continue
+            }
+            keptProviders.put(item)
         }
-        root.put("provider", kept)
+        root.put("provider", keptProviders)
+
+        // 只删我们自己建的那条 source，别碰用户额外加的模型
+        if (sources != null && droppedSources.isNotEmpty()) {
+            val keptSources = JSONArray()
+            for (index in 0 until sources.length()) {
+                val item = sources.optJSONObject(index) ?: continue
+                if (item.optString("id") in droppedSources) continue
+                keptSources.put(item)
+            }
+            root.put("provider_sources", keptSources)
+        }
         file.writeText(root.toString(2))
     }
+
+    private fun readRoot(paths: ContainerPaths): JSONObject? {
+        val file = File(paths.rootfsDir, CONFIG_RELATIVE_PATH)
+        if (!file.exists()) return null
+        return runCatching { JSONObject(file.readText()) }.getOrNull()
+    }
+
+    private fun findById(array: JSONArray?, id: String): JSONObject? {
+        if (array == null || id.isBlank()) return null
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            if (item.optString("id") == id) return item
+        }
+        return null
+    }
+
+    /** 先看自己，再回落到 provider_source —— 与 AstrBot 的 merge 顺序一致。 */
+    private fun JSONObject.valueOr(fallback: JSONObject?, key: String): String {
+        optString(key).takeIf { it.isNotBlank() }?.let { return it }
+        return fallback?.optString(key).orEmpty()
+    }
+
+    /** `key` 正常是数组（支持多密钥轮询），个别老版本给的是字符串。 */
+    private fun firstKey(obj: JSONObject?): String {
+        if (obj == null) return ""
+        val array = obj.optJSONArray("key") ?: return obj.optString("key").orEmpty()
+        return array.optString(0).orEmpty()
+    }
+
+    private fun isChatProvider(type: String, providerType: String): Boolean =
+        providerType == "chat_completion" || type.contains("chat_completion")
 
     /** `sk-abcd1234...wxyz` → `sk-a****wxyz`，只用于界面确认，不用于登录。 */
     private fun maskKey(key: String): String {

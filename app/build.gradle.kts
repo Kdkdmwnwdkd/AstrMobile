@@ -11,8 +11,8 @@ android {
         applicationId = "com.astrmobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 29
-        versionName = "0.12.1"
+        versionCode = 30
+        versionName = "0.12.2"
 
         ndk {
             abiFilters += "arm64-v8a"
