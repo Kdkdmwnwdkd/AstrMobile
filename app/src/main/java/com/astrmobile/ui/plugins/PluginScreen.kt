@@ -175,12 +175,12 @@ fun PluginScreen(
             FilterChip(
                 selected = tab == 0,
                 onClick = { tab = 0 },
-                label = { Text("市场", fontSize = 12.sp) },
+                label = { Text("市场", fontSize = 13.sp) },
             )
             FilterChip(
                 selected = tab == 1,
                 onClick = { tab = 1 },
-                label = { Text("已安装 ${installed.size}", fontSize = 12.sp) },
+                label = { Text("已安装 ${installed.size}", fontSize = 13.sp) },
             )
         }
 
@@ -258,7 +258,7 @@ fun PluginScreen(
                             item(key = "failed-summary") {
                                 Text(
                                     text = "有 ${failed.size} 个插件没加载起来，下面标红的会写明原因",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                                     color = MaterialTheme.colorScheme.error,
                                     lineHeight = 17.sp,
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
@@ -296,7 +296,7 @@ fun PluginScreen(
         Text(
             text = "插件装在容器里，返回上一页会自动重启容器生效（也可点上面「立即重启」）。" +
                 "首次启动可能自动装 Python 依赖，稍慢属正常。",
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             lineHeight = 16.sp,
@@ -321,7 +321,7 @@ private fun Banner(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             color = if (isError) {
                 MaterialTheme.colorScheme.error
             } else {
@@ -331,7 +331,7 @@ private fun Banner(
             lineHeight = 17.sp,
         )
         action?.let {
-            TextButton(onClick = onAction) { Text(it, fontSize = 12.sp) }
+            TextButton(onClick = onAction) { Text(it, fontSize = 13.sp) }
         }
     }
 }
@@ -403,7 +403,7 @@ private fun MarketRow(
                     Spacer(Modifier.height(3.dp))
                     Text(
                         text = plugin.description,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -417,7 +417,7 @@ private fun MarketRow(
                         if (plugin.version.isNotBlank()) append(" · ${plugin.version}")
                         if (plugin.author.isNotBlank()) append(" · ${plugin.author}")
                     },
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -430,9 +430,9 @@ private fun MarketRow(
                     strokeWidth = 2.dp,
                 )
                 installed -> OutlinedButton(onClick = {}, enabled = false) {
-                    Text("已装", fontSize = 11.sp)
+                    Text("已装", fontSize = 12.sp)
                 }
-                else -> Button(onClick = onInstall) { Text("安装", fontSize = 11.sp) }
+                else -> Button(onClick = onInstall) { Text("安装", fontSize = 12.sp) }
             }
         }
     }
@@ -467,7 +467,7 @@ private fun InstalledRow(
                         append(plugin.dirName)
                         if (plugin.version.isNotBlank()) append(" · ${plugin.version}")
                     },
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
@@ -477,7 +477,7 @@ private fun InstalledRow(
                     Spacer(Modifier.height(3.dp))
                     Text(
                         text = "加载失败：${error.take(120)}",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                         color = MaterialTheme.colorScheme.error,
                         lineHeight = 14.sp,
                         maxLines = 3,
@@ -486,10 +486,10 @@ private fun InstalledRow(
                 }
             }
             TextButton(onClick = onConfigure) {
-                Text("配置", fontSize = 11.sp)
+                Text("配置", fontSize = 12.sp)
             }
             TextButton(onClick = onUninstall) {
-                Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
             }
         }
     }

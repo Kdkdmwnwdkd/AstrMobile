@@ -201,7 +201,7 @@ fun ModelScreen(
                             }
                             message = null
                         },
-                        label = { Text(item.label, fontSize = 12.sp) },
+                        label = { Text(item.label, fontSize = 13.sp) },
                     )
                 }
             }
@@ -310,7 +310,7 @@ fun ModelScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = text,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = if (isError) {
                         MaterialTheme.colorScheme.error
                     } else {
@@ -364,7 +364,7 @@ fun ModelScreen(
 
         Text(
             text = "可以保存多个模型，同一时间只有一个处于「使用中」。密钥只写入本机容器，不会上传。",
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 16.sp,
         )
@@ -446,7 +446,7 @@ private fun ModelRow(
                 append(model.apiBase.ifBlank { "未填接口地址" })
                 if (model.keyHint.isNotBlank()) append("\n密钥 ${model.keyHint}")
             },
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontFamily = FontFamily.Monospace,
             lineHeight = 17.sp,

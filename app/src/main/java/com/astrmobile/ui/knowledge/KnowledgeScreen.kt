@@ -215,7 +215,7 @@ fun KnowledgeScreen(
         message?.let { text ->
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 color = if (isError) {
                     MaterialTheme.colorScheme.error
                 } else {
@@ -348,7 +348,7 @@ fun KnowledgeScreen(
                                     )
                                     Text(
                                         "文档 ${kb.documentCount} 个",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
@@ -364,7 +364,7 @@ fun KnowledgeScreen(
                                         )
                                     }
                                 }) {
-                                    Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                    Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                                 }
                             }
                         }
@@ -408,7 +408,7 @@ fun KnowledgeScreen(
                                 if (doc.status.isNotBlank()) {
                                     Text(
                                         doc.status,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
@@ -426,7 +426,7 @@ fun KnowledgeScreen(
                                     )
                                 }
                             }) {
-                                Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                             }
                         }
                     }
@@ -440,7 +440,7 @@ fun KnowledgeScreen(
                         Spacer(Modifier.size(10.dp))
                         Text(
                             progress.ifBlank { "处理中…" },
-                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -465,7 +465,7 @@ fun KnowledgeScreen(
                 TextButton(
                     onClick = { selected?.let { scope.launch { openKb(it) } } },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("刷新列表", fontSize = 12.sp) }
+                ) { Text("刷新列表", fontSize = 13.sp) }
             }
 
             Spacer(Modifier.height(14.dp))

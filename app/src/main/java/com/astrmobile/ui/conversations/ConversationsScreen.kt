@@ -111,7 +111,7 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         message?.let {
             Text(
                 text = it,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 color = MaterialTheme.colorScheme.error,
                 lineHeight = 17.sp,
             )
@@ -184,7 +184,7 @@ private fun ConversationCard(
                 TextButton(onClick = onToggle) {
                     Text(
                         if (expanded) "收起" else "${conversation.history.size} 条",
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                     )
                 }
             }
@@ -192,7 +192,7 @@ private fun ConversationCard(
             if (last != null) {
                 Text(
                     text = "${roleLabel(last.role)}：${last.content}",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = if (expanded) 4 else 2,
                     overflow = TextOverflow.Ellipsis,
@@ -228,7 +228,7 @@ private fun ConversationCard(
                                 Column(modifier = Modifier.padding(10.dp)) {
                                     Text(
                                         text = roleLabel(msg.role),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                         color = if (isUser) {
                                             MaterialTheme.colorScheme.onSurfaceVariant
                                         } else {

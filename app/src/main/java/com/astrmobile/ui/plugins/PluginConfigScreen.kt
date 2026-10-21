@@ -140,7 +140,7 @@ fun PluginConfigScreen(
         message?.let { text ->
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 color = if (isError) {
                     MaterialTheme.colorScheme.error
                 } else {
@@ -293,7 +293,7 @@ private fun ConfigRow(
                     if (item.hint.isNotBlank()) {
                         Text(
                             text = item.hint,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 15.sp,
                         )
@@ -316,7 +316,7 @@ private fun ConfigRow(
                 if (item.hint.isNotBlank()) {
                     Text(
                         text = item.hint,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 15.sp,
                     )
@@ -327,7 +327,7 @@ private fun ConfigRow(
                         FilterChip(
                             selected = value?.toString() == option,
                             onClick = { onChange(option) },
-                            label = { Text(option, fontSize = 11.sp) },
+                            label = { Text(option, fontSize = 12.sp) },
                         )
                     }
                 }
@@ -339,7 +339,7 @@ private fun ConfigRow(
                         if (it == "null" || it == "0.0") "" else it
                     },
                     onValueChange = { onChange(it) },
-                    label = { Text(item.label, fontSize = 12.sp) },
+                    label = { Text(item.label, fontSize = 13.sp) },
                     supportingText = {
                         val range = buildString {
                             if (item.min != null && item.max != null) {
@@ -350,7 +350,7 @@ private fun ConfigRow(
                                 append(item.hint)
                             }
                         }
-                        if (range.isNotBlank()) Text(range, fontSize = 10.sp)
+                        if (range.isNotBlank()) Text(range, fontSize = 11.sp)
                     },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
@@ -370,7 +370,7 @@ private fun ConfigRow(
                 OutlinedTextField(
                     value = value?.toString().orEmpty(),
                     onValueChange = { onChange(it) },
-                    label = { Text(item.label, fontSize = 12.sp) },
+                    label = { Text(item.label, fontSize = 13.sp) },
                     supportingText = {
                         Text(
                             if (item.type == "list") {
@@ -378,7 +378,7 @@ private fun ConfigRow(
                             } else {
                                 item.hint.ifBlank { "" }
                             },
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                         )
                     },
                     minLines = if (item.type == "list") 3 else 2,
@@ -393,9 +393,9 @@ private fun ConfigRow(
                 OutlinedTextField(
                     value = value?.toString().orEmpty(),
                     onValueChange = { onChange(it) },
-                    label = { Text(item.label, fontSize = 12.sp) },
+                    label = { Text(item.label, fontSize = 13.sp) },
                     supportingText = {
-                        if (item.hint.isNotBlank()) Text(item.hint, fontSize = 10.sp)
+                        if (item.hint.isNotBlank()) Text(item.hint, fontSize = 11.sp)
                     },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),

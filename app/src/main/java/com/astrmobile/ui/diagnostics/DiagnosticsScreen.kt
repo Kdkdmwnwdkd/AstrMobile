@@ -170,7 +170,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
         Text(
             text = "自检只读本地状态，不会修改任何配置。改动之后要重新点一次才会更新结论。",
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 16.sp,
         )
@@ -212,7 +212,7 @@ private fun CheckRow(item: CheckItem) {
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = item.detail,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 17.sp,
                 )
@@ -220,7 +220,7 @@ private fun CheckRow(item: CheckItem) {
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = "→ $action",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                         color = color,
                         lineHeight = 17.sp,
                     )

@@ -137,7 +137,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         message?.let { text ->
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 color = if (isError) {
                     MaterialTheme.colorScheme.error
                 } else {
@@ -224,19 +224,19 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = file.name,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontFamily = FontFamily.Monospace,
                                 maxLines = 1,
                             )
                             Text(
                                 text = BackupRepository.humanSize(file.length()),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         TextButton(onClick = { share(context, file) }) {
-                            Text("导出", fontSize = 11.sp)
+                            Text("导出", fontSize = 12.sp)
                         }
                         TextButton(onClick = {
                             if (viewModel.deleteBackup(file)) {
@@ -248,7 +248,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                                 message = "删除失败"
                             }
                         }) {
-                            Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                            Text("删除", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                         }
                     }
                 }
@@ -284,7 +284,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         Text(
             text = "备份包可以导出到网盘或发给自己。换手机时先装 App、" +
                 "让它自己装好环境，再用这里的「从备份恢复」把数据搬回去。",
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 16.sp,
         )

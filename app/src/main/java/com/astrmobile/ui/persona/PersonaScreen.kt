@@ -214,7 +214,7 @@ fun PersonaScreen(
                                 message = null
                                 saved = false
                             },
-                            label = { Text(item.id, fontSize = 12.sp) },
+                            label = { Text(item.id, fontSize = 13.sp) },
                             leadingIcon = {
                                 Icon(
                                     Icons.Rounded.Person,
@@ -317,7 +317,7 @@ fun PersonaScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = text,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = if (isError) {
                         MaterialTheme.colorScheme.error
                     } else {

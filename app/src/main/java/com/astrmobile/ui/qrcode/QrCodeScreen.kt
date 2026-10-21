@@ -307,7 +307,7 @@ fun QrCodeScreen(
                 Spacer(Modifier.height(6.dp))
                 Text(
                     text = "回到控制台，AstrBot 的「QQ 扫码登录」会显示已就绪。",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -321,7 +321,7 @@ fun QrCodeScreen(
                 Text(
                     text = "去「实时日志」搜 WebUi 或 Token，通常会看到一串口令；" +
                         "也可以在 NapCat 网页版的登录提示里找。填进来再试一次。",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 17.sp,
                 )
@@ -329,7 +329,7 @@ fun QrCodeScreen(
                 OutlinedTextField(
                     value = manualInput,
                     onValueChange = { manualInput = it },
-                    label = { Text("口令", fontSize = 12.sp) },
+                    label = { Text("口令", fontSize = 13.sp) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -378,7 +378,7 @@ fun QrCodeScreen(
         Text(
             text = "扫码只是登录 QQ。通信接口（aiocqhttp，ws://127.0.0.1:6199/ws）已由 App 自动配置好，" +
                 "不用再去后台手动添加；扫码成功后等十几秒会自动连上。",
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 17.sp,
         )

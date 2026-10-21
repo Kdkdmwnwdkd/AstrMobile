@@ -66,23 +66,23 @@ fun SectionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // 卡片标题用正文字体而不是等宽小字：等宽 12sp 在深底上最难认
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 trailing?.invoke()
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             content()
         }
     }
@@ -104,7 +104,7 @@ fun KeyValueRow(label: String, value: String, valueColor: Color = MaterialTheme.
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+            style = MaterialTheme.typography.bodyMedium,
             color = valueColor,
             fontFamily = FontFamily.Monospace,
         )
@@ -116,7 +116,7 @@ fun HintText(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         modifier = modifier.fillMaxWidth(),
-        style = MaterialTheme.typography.bodyMedium,
+        style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         lineHeight = 20.sp,
     )

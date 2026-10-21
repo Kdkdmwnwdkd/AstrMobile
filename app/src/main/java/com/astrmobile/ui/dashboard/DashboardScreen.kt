@@ -256,7 +256,7 @@ fun DashboardScreen(
                 )
                 Text(
                     text = creds.password,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = MaterialTheme.colorScheme.primary,
                     fontFamily = FontFamily.Monospace,
                     lineHeight = 16.sp,
@@ -284,7 +284,7 @@ fun DashboardScreen(
             ) {
                 Text(
                     text = token,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = MaterialTheme.colorScheme.primary,
                     fontFamily = FontFamily.Monospace,
                     lineHeight = 16.sp,
@@ -293,7 +293,7 @@ fun DashboardScreen(
                 Text(
                     text = "只有走网页版兜底时才需要它。App 里的「QQ 扫码登录」会自动用它，" +
                         "你不用手动填。",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 17.sp,
                 )
@@ -443,7 +443,7 @@ private fun QuickEntry(
             )
             Text(
                 text = detail,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
