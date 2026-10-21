@@ -2,6 +2,9 @@
 #
 # 为什么不用服务器上的 cron：实例被停之后 cron 也停了，自己叫不醒自己。
 #
+# InstaBox 不需要这个：它闲置暂停后，访问发布的 HTTPS 端口会自动唤醒，
+# 详见 deploy/INSTABOX.md。这个 workflow 只对「停了但能被请求叫醒」的平台有用。
+#
 # 用法：
 #   1. 仓库 Settings → Secrets and variables → Actions → New repository secret
 #      名字填 KEEPALIVE_URL，值填你的服务器地址，例如：

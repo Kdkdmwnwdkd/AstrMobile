@@ -4,6 +4,9 @@
 # 只对「按 CPU/网络活动判断」的平台有效。如果平台是整机停机，
 # 这个脚本会跟着一起停 —— 那种情况必须靠外部探活（见 README 第 9 节）。
 #
+# InstaBox 不需要这个：它闲置暂停后，访问发布的 HTTPS 端口会自动唤醒，
+# 详见 INSTABOX.md。
+#
 # crontab:
 #   */10 * * * * /home/你的用户名/deploy/keepalive.sh >> /home/你的用户名/deploy/keepalive.log 2>&1
 set -uo pipefail
