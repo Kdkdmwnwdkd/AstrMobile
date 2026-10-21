@@ -58,7 +58,9 @@ App 内可以直接完成的事（不用进网页后台）：
 - NapCat 的反向 WebSocket 指向 AstrBot（`ws://127.0.0.1:6199/ws`）
 - AstrBot 的 `aiocqhttp` 平台自动开启并监听 6199
 - NapCat 的 WebUI 口令与端口固定（否则会随机化，App 连不上）
-- AstrBot 后台口令在首次启动时设为 `astrbot`（否则会生成 24 位随机值）
+- AstrBot 后台口令在首次启动时设为 `astrbot`（否则会生成 24 位随机值），并只监听 `127.0.0.1`
+- NapCat 的 WebUI 同样只监听 `127.0.0.1`——它能直接操作 QQ 账号，不能对局域网开放
+- NapCat 进程被系统回收、6099 不再监听时，App 会单独把 QQ 协议端拉起来（不影响 AstrBot）
 
 ## 与两个参考项目的关系
 
@@ -149,6 +151,7 @@ export ANDROID_HOME=/path/to/android-sdk
 ## 已知限制
 
 - **仅 arm64-v8a**，Android 8.0+；x86 设备与模拟器不支持
+- **后台只监听本机**：6185 / 6099 都绑在 `127.0.0.1`，同一 WiFi 下的其他设备访问不到。需要从电脑打开后台时用 `adb forward tcp:6185 tcp:6185`，不要为了图方便把端口放开到局域网
 - **首次安装依赖网络**：apt（Ubuntu 包）、PyPI、NapCat/QQ 安装包，任一环节失败都需要重试
 - **内存占用**：NapCat 基于 Electron，常驻 1–2GB，低配机型容易被系统回收
 - **QQ 风控**：非官方协议，存在封号风险，建议使用小号
