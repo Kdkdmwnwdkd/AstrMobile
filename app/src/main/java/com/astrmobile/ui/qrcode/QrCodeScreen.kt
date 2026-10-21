@@ -118,11 +118,12 @@ fun QrCodeScreen(
         }
 
         statusText = "正在获取二维码…"
-        // NapCat 首次生成二维码要先拉 QQ 客户端，头几次可能返回
-        // "QRCode Get Error"。这属于「还没准备好」，重试几次就好了。
+        // NapCat 首次要先把 QQ 客户端拉起来，冷启动十几秒很正常，
+        // 这段时间 GetQQLoginQrcode 一直返回 "QRCode Get Error"。
+        // 以前只等 6 秒，容器刚启动就进来的用户必然看到失败。
         var rawQrcode: String? = null
         var qrError = ""
-        for (attempt in 1..3) {
+        for (attempt in 1..10) {
             val result = api.fetchQrcode(credential)
             if (result.isSuccess) {
                 rawQrcode = result.getOrNull()
@@ -130,16 +131,22 @@ fun QrCodeScreen(
             }
             qrError = result.exceptionOrNull()?.message.orEmpty()
             if (qrError.contains("Is Logined", ignoreCase = true)) break
-            if (attempt < 3) {
-                statusText = "NapCat 正在准备二维码…（第 $attempt 次）"
-                delay(2_000)
+            if (attempt < 10) {
+                statusText = "正在等 QQ 客户端启动并生成二维码…（第 $attempt 次，最多约 30 秒）"
+                delay(3_000)
             }
+        }
+
+        if (rawQrcode == null) {
+            // 某些版本 Get 返回空，但 CheckLoginStatus 里带着同一个码，兜一下
+            rawQrcode = api.checkStatus(credential)?.qrcode
         }
 
         if (rawQrcode == null) {
             // 已经登录过时 NapCat 会直接拒绝发码，这不是故障。
             if (qrError.contains("Is Logined", ignoreCase = true)) {
-                statusText = "这个 QQ 已经登录了，无需再扫码"
+                statusText = "NapCat 认为这个 QQ 已经登录，无需再扫码。\n" +
+                    "如果控制台显示离线，请回控制台重启一次容器。"
                 isSuccess = true
             } else {
                 statusText = buildString {
@@ -155,7 +162,12 @@ fun QrCodeScreen(
         }
 
         qrcode = QrCodeDecoder.decode(rawQrcode)
-        statusText = if (qrcode == null) "二维码解析失败，请点刷新重试" else "用手机 QQ 扫描上方二维码"
+        statusText = if (qrcode == null) {
+            "二维码解析失败：NapCat 返回了 ${rawQrcode.length} 个字符，开头是 " +
+                rawQrcode.take(24) + "…（点刷新重试，仍失败请到日志页反馈）"
+        } else {
+            "用手机 QQ 扫描上方二维码"
+        }
         isError = qrcode == null
         if (qrcode == null) return@LaunchedEffect
 
@@ -166,7 +178,9 @@ fun QrCodeScreen(
             // 二维码有效期约 2 分钟，过期后画面上是张废码，扫了也没反应。
             // 提前刷新，但不用重跑整个流程（会重新登录 NapCat）。
             if (System.currentTimeMillis() - qrFetchedAt > 100_000) {
-                val fresh = api.fetchQrcode(credential).getOrNull()
+                // 只调 Get 拿到的还是同一张旧码，必须让 NapCat 重新拉一次
+                val fresh = api.refreshQrcode(credential).getOrNull()
+                    ?: api.fetchQrcode(credential).getOrNull()
                 val bitmap = fresh?.let { QrCodeDecoder.decode(it) }
                 if (bitmap != null) {
                     qrcode = bitmap
@@ -196,6 +210,8 @@ fun QrCodeScreen(
                     status.isOffline -> statusText = "账号已掉线，请重新扫码"
                     status.loginPhase == "qrcode_scanned" ||
                         status.loginPhase == "initializing" -> statusText = "已扫描，请在手机上确认登录"
+                    status.loginPhase == "waiting_qrcode" ||
+                        status.loginPhase == "generating_qrcode" -> statusText = "NapCat 正在准备二维码，稍等一下…"
                     status.loginPhase == "qrcode_expired" -> {
                         statusText = "二维码已过期，正在重新获取…"
                         qrFetchedAt = 0
