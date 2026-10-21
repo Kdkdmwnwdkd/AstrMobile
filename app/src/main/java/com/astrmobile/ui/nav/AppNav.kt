@@ -1,12 +1,27 @@
 package com.astrmobile.ui.nav
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SmartToy
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.astrmobile.MainViewModel
@@ -49,6 +64,20 @@ object Routes {
     fun web(port: Int) = "web/$port"
 }
 
+/** 底部四个主入口。其余页面都是二级页面，从控制台进去。 */
+private data class MainTab(
+    val route: String,
+    val label: String,
+    val icon: ImageVector,
+)
+
+private val mainTabs = listOf(
+    MainTab(Routes.Home, "控制台", Icons.Rounded.Dashboard),
+    MainTab(Routes.Models, "模型", Icons.Rounded.SmartToy),
+    MainTab(Routes.Plugins, "插件", Icons.Rounded.Extension),
+    MainTab(Routes.Settings, "设置", Icons.Rounded.Settings),
+)
+
 @Composable
 fun AppNav(viewModel: MainViewModel) {
     val navController = rememberNavController()
@@ -74,153 +103,183 @@ fun AppNav(viewModel: MainViewModel) {
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = if (ready) Routes.Home else Routes.Onboarding,
-    ) {
-        composable(Routes.Onboarding) {
-            OnboardingScreen(
-                viewModel = viewModel,
-                onFinished = {
-                    navController.navigate(Routes.Home) {
-                        popUpTo(Routes.Onboarding) { inclusive = true }
-                        launchSingleTop = true
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+    val showBottomBar = mainTabs.any { it.route == currentRoute }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            if (showBottomBar) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    mainTabs.forEach { tab ->
+                        NavigationBarItem(
+                            selected = currentRoute == tab.route,
+                            onClick = {
+                                if (currentRoute != tab.route) {
+                                    navController.navigate(tab.route) {
+                                        // 四个 tab 平级：回到根再切换，保留各自的滚动位置
+                                        popUpTo(Routes.Home) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            label = { Text(tab.label) },
+                        )
                     }
-                },
-            )
-        }
+                }
+            }
+        },
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = if (ready) Routes.Home else Routes.Onboarding,
+            modifier = Modifier.padding(innerPadding),
+        ) {
+            composable(Routes.Onboarding) {
+                OnboardingScreen(
+                    viewModel = viewModel,
+                    onFinished = {
+                        navController.navigate(Routes.Home) {
+                            popUpTo(Routes.Onboarding) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
 
-        composable(Routes.Home) {
-            DashboardScreen(
-                viewModel = viewModel,
-                onOpenConsole = { navController.navigate(Routes.Console) },
-                onOpenSettings = { navController.navigate(Routes.Settings) },
-                onOpenWeb = { port -> navController.navigate(Routes.web(port)) },
-                onOpenQr = { navController.navigate(Routes.QrCode) },
-                onOpenModels = { navController.navigate(Routes.Models) },
-                onOpenPlugins = { navController.navigate(Routes.Plugins) },
-                onOpenPersona = { navController.navigate(Routes.Persona) },
-                onOpenKnowledge = { navController.navigate(Routes.Knowledge) },
-                onOpenDiagnostics = { navController.navigate(Routes.Diagnostics) },
-                onOpenBackup = { navController.navigate(Routes.Backup) },
-                onOpenConversations = { navController.navigate(Routes.Conversations) },
-                onRepair = {
-                    viewModel.prepareReinstall()
-                    navController.navigate(Routes.Onboarding)
-                },
-            )
-        }
+            composable(Routes.Home) {
+                DashboardScreen(
+                    viewModel = viewModel,
+                    onOpenConsole = { navController.navigate(Routes.Console) },
+                    onOpenSettings = { navController.navigate(Routes.Settings) },
+                    onOpenWeb = { port -> navController.navigate(Routes.web(port)) },
+                    onOpenQr = { navController.navigate(Routes.QrCode) },
+                    onOpenPersona = { navController.navigate(Routes.Persona) },
+                    onOpenKnowledge = { navController.navigate(Routes.Knowledge) },
+                    onOpenDiagnostics = { navController.navigate(Routes.Diagnostics) },
+                    onOpenBackup = { navController.navigate(Routes.Backup) },
+                    onOpenConversations = { navController.navigate(Routes.Conversations) },
+                    onRepair = {
+                        viewModel.prepareReinstall()
+                        navController.navigate(Routes.Onboarding)
+                    },
+                )
+            }
 
-        composable(Routes.QrCode) {
-            QrCodeScreen(
-                viewModel = viewModel,
-                onBack = { navController.popBackStack() },
-                onOpenWebFallback = { navController.navigate(Routes.web(6099)) },
-            )
-        }
+            composable(Routes.QrCode) {
+                QrCodeScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                    onOpenWebFallback = { navController.navigate(Routes.web(6099)) },
+                )
+            }
 
-        composable(Routes.Models) {
-            ModelScreen(
-                viewModel = viewModel,
-                onBack = { navController.popBackStack() },
-                onRestart = {
-                    viewModel.restartContainer()
-                    navController.popBackStack()
-                },
-            )
-        }
+            composable(Routes.Models) {
+                ModelScreen(
+                    viewModel = viewModel,
+                    showBack = false,
+                    onBack = { navController.popBackStack() },
+                    onRestart = { viewModel.restartContainer() },
+                )
+            }
 
-        composable(Routes.Plugins) {
-            PluginScreen(
-                viewModel = viewModel,
-                onBack = { navController.popBackStack() },
-                onRestart = {
-                    viewModel.restartContainer()
-                    navController.popBackStack()
-                },
-                onOpenConfig = { pluginId ->
-                    navController.navigate(Routes.pluginConfig(pluginId))
-                },
-            )
-        }
+            composable(Routes.Plugins) {
+                PluginScreen(
+                    viewModel = viewModel,
+                    showBack = false,
+                    onBack = { navController.popBackStack() },
+                    onRestart = { viewModel.restartContainer() },
+                    onOpenConfig = { pluginId ->
+                        navController.navigate(Routes.pluginConfig(pluginId))
+                    },
+                )
+            }
 
-        composable(Routes.Persona) {
-            PersonaScreen(
-                viewModel = viewModel,
-                onBack = { navController.popBackStack() },
-                onRestart = {
-                    viewModel.restartContainer()
-                    navController.popBackStack()
-                },
-            )
-        }
+            composable(Routes.Persona) {
+                PersonaScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                    onRestart = {
+                        viewModel.restartContainer()
+                        navController.popBackStack()
+                    },
+                )
+            }
 
-        composable(Routes.Knowledge) {
-            KnowledgeScreen(
-                viewModel = viewModel,
-                onBack = { navController.popBackStack() },
-                onRestart = {
-                    viewModel.restartContainer()
-                    navController.popBackStack()
-                },
-            )
-        }
+            composable(Routes.Knowledge) {
+                KnowledgeScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                    onRestart = {
+                        viewModel.restartContainer()
+                        navController.popBackStack()
+                    },
+                )
+            }
 
-        composable(Routes.Diagnostics) {
-            DiagnosticsScreen(
-                viewModel = viewModel,
-                onBack = { navController.popBackStack() },
-            )
-        }
+            composable(Routes.Diagnostics) {
+                DiagnosticsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                )
+            }
 
-        composable(
-            route = Routes.PluginConfig,
-            arguments = listOf(navArgument("pluginId") { type = NavType.StringType }),
-        ) { entry ->
-            PluginConfigScreen(
-                viewModel = viewModel,
-                pluginId = entry.arguments?.getString("pluginId").orEmpty(),
-                onBack = { navController.popBackStack() },
-                onRestart = {
-                    viewModel.restartContainer()
-                    navController.popBackStack()
-                },
-            )
-        }
+            composable(
+                route = Routes.PluginConfig,
+                arguments = listOf(navArgument("pluginId") { type = NavType.StringType }),
+            ) { entry ->
+                PluginConfigScreen(
+                    viewModel = viewModel,
+                    pluginId = entry.arguments?.getString("pluginId").orEmpty(),
+                    onBack = { navController.popBackStack() },
+                    onRestart = {
+                        viewModel.restartContainer()
+                        navController.popBackStack()
+                    },
+                )
+            }
 
-        composable(Routes.Backup) {
-            BackupScreen(
-                viewModel = viewModel,
-                onBack = { navController.popBackStack() },
-            )
-        }
+            composable(Routes.Backup) {
+                BackupScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                )
+            }
 
-        composable(Routes.Conversations) {
-            ConversationsScreen(
-                viewModel = viewModel,
-                onBack = { navController.popBackStack() },
-            )
-        }
+            composable(Routes.Conversations) {
+                ConversationsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                )
+            }
 
-        composable(Routes.Console) {
-            ConsoleScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
-        }
+            composable(Routes.Console) {
+                ConsoleScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+            }
 
-        composable(Routes.Settings) {
-            SettingsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
-        }
+            composable(Routes.Settings) {
+                SettingsScreen(
+                    viewModel = viewModel,
+                    showBack = false,
+                    onBack = { navController.popBackStack() },
+                )
+            }
 
-        composable(
-            route = Routes.Web,
-            arguments = listOf(navArgument("port") { type = NavType.IntType }),
-        ) { entry ->
-            val port = entry.arguments?.getInt("port") ?: 6185
-            WebUiScreen(
-                initialPort = port,
-                astrbotPort = viewModel.containerPorts().first,
-                napcatPort = viewModel.containerPorts().second,
-                onBack = { navController.popBackStack() },
-            )
+            composable(
+                route = Routes.Web,
+                arguments = listOf(navArgument("port") { type = NavType.IntType }),
+            ) { entry ->
+                val port = entry.arguments?.getInt("port") ?: 6185
+                WebUiScreen(
+                    initialPort = port,
+                    astrbotPort = viewModel.containerPorts().first,
+                    napcatPort = viewModel.containerPorts().second,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }

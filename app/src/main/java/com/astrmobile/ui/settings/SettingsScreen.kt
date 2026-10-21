@@ -47,7 +47,11 @@ import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+fun SettingsScreen(
+    viewModel: MainViewModel,
+    showBack: Boolean = true,
+    onBack: () -> Unit,
+) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
@@ -63,14 +67,15 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             .padding(horizontal = 20.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Rounded.ArrowBack, contentDescription = "返回")
+            if (showBack) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Rounded.ArrowBack, contentDescription = "返回")
+                }
             }
             Text(
-                text = "SETTINGS / 设置",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = FontFamily.Monospace,
+                text = "设置",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
             )
         }
 

@@ -66,6 +66,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ModelScreen(
     viewModel: MainViewModel,
+    showBack: Boolean = true,
     onBack: () -> Unit,
     onRestart: () -> Unit,
 ) {
@@ -107,14 +108,15 @@ fun ModelScreen(
             .verticalScroll(rememberScrollState()),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Rounded.ArrowBack, contentDescription = "返回")
+            if (showBack) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Rounded.ArrowBack, contentDescription = "返回")
+                }
             }
             Text(
                 text = "对话模型",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f),
             )
         }

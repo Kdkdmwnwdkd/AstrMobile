@@ -60,6 +60,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun PluginScreen(
     viewModel: MainViewModel,
+    showBack: Boolean = true,
     onBack: () -> Unit,
     onRestart: () -> Unit,
     onOpenConfig: (String) -> Unit,
@@ -122,21 +123,22 @@ fun PluginScreen(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Rounded.ArrowBack, contentDescription = "返回")
+            if (showBack) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Rounded.ArrowBack, contentDescription = "返回")
+                }
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "插件",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
                     text = market?.let { "市场 ${it.size} 个 · 已装 ${installed.size} 个" }
                         ?: "已装 ${installed.size} 个",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily.Monospace,
                 )
             }
             IconButton(

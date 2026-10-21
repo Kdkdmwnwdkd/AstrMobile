@@ -22,13 +22,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CloudUpload
-import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.HealthAndSafety
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.QrCodeScanner
-import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.Button
@@ -42,7 +40,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,9 +61,16 @@ import com.astrmobile.service.ContainerService
 import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.KeyValueRow
 import com.astrmobile.ui.components.SectionCard
-import com.astrmobile.ui.components.copyText
 import com.astrmobile.ui.components.StatusDot
+import com.astrmobile.ui.components.copyText
 
+/**
+ * 控制台。
+ *
+ * 只放三件事：现在是什么状态、开关、常用入口。
+ * 模型和插件是独立的主页面（底部导航直达），这里不再重复列一遍——
+ * 之前 9 条入口竖排加上引导、凭据，一屏根本放不下。
+ */
 @Composable
 fun DashboardScreen(
     viewModel: MainViewModel,
@@ -70,8 +78,6 @@ fun DashboardScreen(
     onOpenSettings: () -> Unit,
     onOpenWeb: (Int) -> Unit,
     onOpenQr: () -> Unit,
-    onOpenModels: () -> Unit,
-    onOpenPlugins: () -> Unit,
     onOpenPersona: () -> Unit,
     onOpenKnowledge: () -> Unit,
     onOpenDiagnostics: () -> Unit,
@@ -81,14 +87,16 @@ fun DashboardScreen(
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-
     val (statusText, statusColor) = describe(state)
+
+    var showCredentials by remember { mutableStateOf(false) }
+    var showGuide by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 24.dp),
+            .padding(horizontal = 20.dp, vertical = 20.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -97,14 +105,14 @@ fun DashboardScreen(
         ) {
             Column {
                 Text(
-                    text = "CONTROL / 控制台",
+                    text = "CONTROL",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace,
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "AstrMobile",
+                    text = "控制台",
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
@@ -118,10 +126,11 @@ fun DashboardScreen(
             }
         }
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // ---------------------------------------------------------- 状态总览
-        SectionCard(title = "容器状态") {
+        // ---------------------------------------------------------- 状态
+        val running = state as? ContainerState.Running
+        SectionCard(title = "运行状态") {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (state is ContainerState.Starting || state is ContainerState.Stopping) {
                     CircularProgressIndicator(
@@ -144,13 +153,12 @@ fun DashboardScreen(
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
-            val running = state as? ContainerState.Running
             KeyValueRow(
-                label = "AstrBot 后台",
+                label = "AstrBot",
                 value = when {
-                    running == null -> "http://127.0.0.1:6185"
+                    running == null -> "6185"
                     running.astrbotReady -> "已就绪 :6185"
                     else -> "启动中…"
                 },
@@ -161,20 +169,20 @@ fun DashboardScreen(
                 },
             )
             KeyValueRow(
-                label = "QQ 扫码登录",
+                label = "QQ 协议端",
                 value = when {
-                    running == null -> "http://127.0.0.1:6099"
+                    running == null -> "6099"
                     running.napcatReady -> "已就绪 :6099"
                     else -> "启动中…"
                 },
                 valueColor = if (running?.napcatReady == true) {
-                    MaterialTheme.colorScheme.secondary
+                    MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (state is ContainerState.Running || state is ContainerState.Starting) {
@@ -185,8 +193,8 @@ fun DashboardScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
+                            .height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
                     ) {
                         Text("停止")
                     }
@@ -194,8 +202,8 @@ fun DashboardScreen(
                         onClick = { viewModel.restartContainer() },
                         modifier = Modifier
                             .weight(0.75f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
+                            .height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
                     ) {
                         Text("重启")
                     }
@@ -204,8 +212,8 @@ fun DashboardScreen(
                         onClick = { startWithService(context) },
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
+                            .height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -217,258 +225,251 @@ fun DashboardScreen(
                     }
                 }
             }
+
+            Spacer(Modifier.height(6.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onOpenConsole) {
+                    Icon(
+                        Icons.Rounded.Terminal,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("实时日志", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TextButton(
+                    onClick = {
+                        if (running?.astrbotReady == true) {
+                            onOpenWeb(6185)
+                        } else {
+                            Toast.makeText(context, "AstrBot 还在启动，等状态变成「已就绪」", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                ) {
+                    Icon(
+                        Icons.Rounded.Language,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("打开后台", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
 
-        // ---------------------------------------------------------- 后台登录
+        // ---------------------------------------------------------- 常用入口
+        SectionCard(title = "常用") {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                QuickTile(
+                    icon = Icons.Rounded.HealthAndSafety,
+                    title = "自检",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenDiagnostics,
+                )
+                QuickTile(
+                    icon = Icons.Rounded.QrCodeScanner,
+                    title = "扫码登录",
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        if (running?.napcatReady == true) {
+                            onOpenQr()
+                        } else {
+                            Toast.makeText(context, "NapCat 还在启动，请稍等", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                )
+                QuickTile(
+                    icon = Icons.Rounded.Person,
+                    title = "人格",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenPersona,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                QuickTile(
+                    icon = Icons.Rounded.MenuBook,
+                    title = "知识库",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenKnowledge,
+                )
+                QuickTile(
+                    icon = Icons.Rounded.ChatBubbleOutline,
+                    title = "对话记录",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenConversations,
+                )
+                QuickTile(
+                    icon = Icons.Rounded.CloudUpload,
+                    title = "备份",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenBackup,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // ---------------------------------------------------------- 登录信息（折叠）
         val credentials by produceState<DashboardCredentials?>(null, state) {
             value = viewModel.readDashboardCredentials()
         }
-        credentials?.let { creds ->
-            Spacer(Modifier.height(14.dp))
-            SectionCard(
-                title = "AstrBot 后台登录",
-                trailing = {
-                    TextButton(
-                        onClick = { copyText(context, "AstrBot 登录信息", "${creds.username}\n${creds.password}") },
-                    ) {
-                        Text("复制", style = MaterialTheme.typography.labelSmall)
-                    }
-                },
-            ) {
-                Text(
-                    text = "账号",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = creds.username,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "密码（默认口令，登录后建议自行修改）",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = creds.password,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontFamily = FontFamily.Monospace,
-                    lineHeight = 16.sp,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // ---------------------------------------------------------- NapCat Token
         val napcatToken by produceState<String?>(null, state) {
             value = viewModel.readNapCatToken()
         }
-        napcatToken?.let { token ->
-            Spacer(Modifier.height(14.dp))
+
+        if (credentials != null || napcatToken != null) {
             SectionCard(
-                title = "NapCat 网页版口令（兜底用）",
+                title = "登录信息",
                 trailing = {
-                    TextButton(
-                        onClick = { copyText(context, "NapCat Token", token) },
-                    ) {
-                        Text("复制", style = MaterialTheme.typography.labelSmall)
+                    TextButton(onClick = { showCredentials = !showCredentials }) {
+                        Text(if (showCredentials) "收起" else "展开")
                     }
                 },
             ) {
+                if (!showCredentials) {
+                    Text(
+                        text = "后台账号密码、NapCat 口令，需要进网页版时再用",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    credentials?.let { creds ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "${creds.username} / ${creds.password}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                            TextButton(
+                                onClick = {
+                                    copyText(context, "AstrBot 登录信息", "${creds.username}\n${creds.password}")
+                                },
+                            ) { Text("复制") }
+                        }
+                    }
+                    napcatToken?.let { token ->
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "NapCat: $token",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                            TextButton(onClick = { copyText(context, "NapCat Token", token) }) {
+                                Text("复制")
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        // ---------------------------------------------------------- 首次引导（折叠）
+        SectionCard(
+            title = "第一次用",
+            trailing = {
+                TextButton(onClick = { showGuide = !showGuide }) {
+                    Text(if (showGuide) "收起" else "展开")
+                }
+            },
+        ) {
+            if (!showGuide) {
                 Text(
-                    text = token,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                    color = MaterialTheme.colorScheme.primary,
-                    fontFamily = FontFamily.Monospace,
-                    lineHeight = 16.sp,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "只有走网页版兜底时才需要它。App 里的「QQ 扫码登录」会自动用它，" +
-                        "你不用手动填。",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                    text = "启动 → 扫码 → 配模型 → 群里 @ 它",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 17.sp,
                 )
+            } else {
+                GuideStep("1", "启动机器人", "等两个端口都变成「已就绪」。")
+                GuideStep("2", "扫码登录 QQ", "用手机 QQ 扫，扫完在手机上点确认。")
+                GuideStep("3", "配模型", "底部「模型」页填 API Key，保存即生效。")
+                GuideStep("4", "写人格", "底部「插件」旁边没有，进「人格」写一段人设，保存后返回会自动重启。")
+                Spacer(Modifier.height(6.dp))
+                TextButton(onClick = onRepair) {
+                    Text("环境坏了？重新安装", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
 
-        Spacer(Modifier.height(14.dp))
-
-        // ---------------------------------------------------------- 快捷入口
-        SectionCard(title = "快捷入口") {
-            val running = state as? ContainerState.Running
-
-            QuickEntry(
-                icon = Icons.Rounded.CloudUpload,
-                title = "备份与恢复",
-                detail = "折腾坏了能回到之前的状态",
-                onClick = onOpenBackup,
-            )
-            QuickEntry(
-                icon = Icons.Rounded.HealthAndSafety,
-                title = "自检",
-                detail = "一眼看出哪步没通、该怎么修",
-                onClick = onOpenDiagnostics,
-            )
-            QuickEntry(
-                icon = Icons.Rounded.SmartToy,
-                title = "对话模型",
-                detail = "填 API Key，机器人才能开口说话",
-                onClick = onOpenModels,
-            )
-            QuickEntry(
-                icon = Icons.Rounded.Person,
-                title = "人格设定",
-                detail = "写清楚它是什么性格、怎么说话",
-                onClick = onOpenPersona,
-            )
-            QuickEntry(
-                icon = Icons.Rounded.Extension,
-                title = "插件",
-                detail = "表情包、人格、记忆、主动聊天都在这里装",
-                onClick = onOpenPlugins,
-            )
-            QuickEntry(
-                icon = Icons.Rounded.MenuBook,
-                title = "知识库",
-                detail = "上传资料，回答前先查再答",
-                onClick = onOpenKnowledge,
-            )
-            QuickEntry(
-                icon = Icons.Rounded.Language,
-                title = "AstrBot 网页后台",
-                detail = "装插件、设人格、看对话记录",
-                onClick = {
-                    if (running?.astrbotReady == true) {
-                        onOpenWeb(6185)
-                    } else {
-                        Toast.makeText(context, "AstrBot 还在启动，请等状态变成「已就绪」", Toast.LENGTH_SHORT).show()
-                    }
-                },
-            )
-            QuickEntry(
-                icon = Icons.Rounded.QrCodeScanner,
-                title = "QQ 扫码登录",
-                detail = "二维码直接显示在 App 里，不用进网页",
-                onClick = {
-                    if (running?.napcatReady == true) {
-                        onOpenQr()
-                    } else {
-                        Toast.makeText(context, "NapCat 还在启动，请稍等", Toast.LENGTH_SHORT).show()
-                    }
-                },
-            )
-            QuickEntry(
-                icon = Icons.Rounded.ChatBubbleOutline,
-                title = "对话记录",
-                detail = "看它到底回没回、回了什么",
-                onClick = onOpenConversations,
-            )
-            QuickEntry(
-                icon = Icons.Rounded.Terminal,
-                title = "实时日志",
-                detail = "排查安装与运行问题",
-                onClick = onOpenConsole,
-            )
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        // ---------------------------------------------------------- 使用指引
-        SectionCard(title = "首次使用四步") {
-            GuideStep("1", "启动容器", "点上面的「启动机器人」，等待两个端口都变为「已就绪」。")
-            GuideStep("2", "扫码登录 QQ", "进入 NapCat 扫码页，用手机 QQ 扫码并确认登录。")
-            GuideStep("3", "接上 AstrBot", "在 AstrBot 后台「机器人 → 通信接口」新增 aiocqhttp，地址 ws://127.0.0.1:6199/ws。")
-            GuideStep("4", "配置大模型", "在「模型提供商」填入 API Key，之后群里 @机器人 即可对话。")
-
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onRepair) {
-                Text("环境异常？重新安装", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
         HintText(
-            "提示：QQ 机器人使用非官方协议，存在被风控或封号的概率，请优先使用小号；" +
-                "NapCat 与 QQ 客户端常驻后台会占用较多内存，低配机型可能被系统回收。",
+            "QQ 机器人使用非官方协议，有被风控或封号的概率，建议用小号。" +
+                "NapCat 常驻会占 1–2GB 内存，低配机型容易被系统回收。",
         )
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(16.dp))
     }
 }
 
+/** 快捷入口：图标在上、文字在下的小方块，比原来一长串列表省一半高度。 */
 @Composable
-private fun QuickEntry(
+private fun QuickTile(
     icon: ImageVector,
     title: String,
-    detail: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
+    Column(
+        modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(14.dp),
+            )
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .background(
-                    MaterialTheme.colorScheme.surfaceVariant,
-                    RoundedCornerShape(12.dp),
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        Column(modifier = Modifier.padding(start = 12.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
 @Composable
 private fun GuideStep(index: String, title: String, detail: String) {
-    Row(modifier = Modifier.padding(vertical = 6.dp)) {
+    Row(modifier = Modifier.padding(vertical = 5.dp)) {
         Text(
             text = index,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             fontFamily = FontFamily.Monospace,
-            modifier = Modifier.padding(top = 3.dp),
+            modifier = Modifier.padding(top = 2.dp),
         )
-        Column(modifier = Modifier.padding(start = 12.dp)) {
+        Column(modifier = Modifier.padding(start = 10.dp)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = detail,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp,
             )
@@ -477,18 +478,18 @@ private fun GuideStep(index: String, title: String, detail: String) {
 }
 
 private fun describe(state: ContainerState): Pair<String, Color> = when (state) {
-    is ContainerState.NotInstalled -> "环境未安装" to Color(0xFFFFB454)
-    is ContainerState.Stopped -> "已停止" to Color(0xFF9FB0AA)
-    is ContainerState.Starting -> "正在启动…" to Color(0xFF3DDC97)
-    is ContainerState.Stopping -> "正在停止…" to Color(0xFFFFB454)
-    is ContainerState.Failed -> "运行异常" to Color(0xFFFF6B6B)
+    is ContainerState.NotInstalled -> "环境未安装" to Color(0xFFFFC46B)
+    is ContainerState.Stopped -> "已停止" to Color(0xFFBAC7C2)
+    is ContainerState.Starting -> "正在启动…" to Color(0xFF4FE3A4)
+    is ContainerState.Stopping -> "正在停止…" to Color(0xFFFFC46B)
+    is ContainerState.Failed -> "运行异常" to Color(0xFFFF7B72)
     is ContainerState.Running -> when {
-        state.fullyReady -> "运行中" to Color(0xFF3DDC97)
-        else -> "容器已起，服务启动中" to Color(0xFFFFB454)
+        state.fullyReady -> "运行中" to Color(0xFF4FE3A4)
+        else -> "容器已起，服务启动中" to Color(0xFFFFC46B)
     }
     is ContainerState.Restarting ->
         "异常退出，${state.delaySeconds}s 后自动重启（${state.attempt}/${state.maxAttempts}）" to
-            Color(0xFFFFB454)
+            Color(0xFFFFC46B)
 }
 
 private fun startWithService(context: Context) {
