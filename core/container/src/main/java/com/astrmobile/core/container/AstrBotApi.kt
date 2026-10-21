@@ -39,10 +39,19 @@ class AstrBotApi(private val port: Int = 6185) {
             )
 
         if (response.cookie.isBlank()) {
-            val hint = response.message.ifBlank { "登录失败" }
-            return@withContext Result.failure(
-                IllegalStateException("$hint（后台密码不对？默认是 astrbot）"),
-            )
+            val raw = response.message.ifBlank { "登录失败" }
+            // AstrBot 4.29 会把首次生成的随机密码直接吐成英文原文，用户看不懂也不知道该干什么
+            val friendly = if (
+                raw.contains("Login failed", ignoreCase = true) ||
+                raw.contains("password", ignoreCase = true)
+            ) {
+                "AstrBot 后台密码不对。\n" +
+                    "首次使用：它启动时生成过随机密码，重启一次容器就会恢复成 astrbot（0.14.2 起）。\n" +
+                    "自己改过密码：在页面顶部的密码框里填你自己的那个。"
+            } else {
+                raw
+            }
+            return@withContext Result.failure(IllegalStateException(friendly))
         }
         Result.success(response.cookie)
     }

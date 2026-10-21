@@ -58,7 +58,7 @@ App 内可以直接完成的事（不用进网页后台）：
 - NapCat 的反向 WebSocket 指向 AstrBot（`ws://127.0.0.1:6199/ws`）
 - AstrBot 的 `aiocqhttp` 平台自动开启并监听 6199
 - NapCat 的 WebUI 口令与端口固定（否则会随机化，App 连不上）
-- AstrBot 后台口令在首次启动时设为 `astrbot`（否则会生成 24 位随机值），并只监听 `127.0.0.1`
+- AstrBot 后台口令固定为 `astrbot`（4.29 会自己生成随机密码，App 启动时把它恢复成默认值；你自己改过的不受影响），并只监听 `127.0.0.1`
 - NapCat 的 WebUI 同样只监听 `127.0.0.1`——它能直接操作 QQ 账号，不能对局域网开放
 - NapCat 进程被系统回收、6099 不再监听时，App 会单独把 QQ 协议端拉起来（不影响 AstrBot）
 

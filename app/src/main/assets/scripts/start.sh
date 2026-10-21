@@ -200,19 +200,25 @@ except Exception:
     raise SystemExit(0)
 
 changed = False
-
-# 首次运行且从未设过密码时固定成默认口令。
-# 否则 AstrBot 会生成 24 位随机密码，用户不知道该填什么，只能看到登录页。
 dash = cfg.setdefault("dashboard", {})
-if not dash.get("password") and not dash.get("pbkdf2_password"):
-    raw = "astrbot"
+
+# AstrBot 4.29 起会在首次启动时生成随机强密码，只打印一次在日志里，
+# App 拿不到就没法登录后台（人格、插件参数都走后台接口）。
+# `password_change_required` 为 true 说明这仍是系统生成的密码、用户没改过，
+# 这时恢复成默认值；用户自己改过密码的话该标记会被 AstrBot 清掉，不会被动。
+needs_default_password = bool(dash.get("password_change_required")) or (
+    not dash.get("password") and not dash.get("pbkdf2_password")
+)
+if needs_default_password:
+    raw = os.environ.get("ASTRBOT_DASHBOARD_PASSWORD") or "astrbot"
     salt = os.urandom(16)
     digest = hashlib.pbkdf2_hmac("sha256", raw.encode(), salt, 600000)
     dash["pbkdf2_password"] = "pbkdf2_sha256$600000${}${}".format(salt.hex(), digest.hex())
     dash["password"] = hashlib.md5(raw.encode()).hexdigest()
     dash["password_storage_upgraded"] = True
+    dash["password_change_required"] = False
     changed = True
-    print("[start] 已设置 AstrBot 后台默认口令（astrbot）")
+    print("[start] 已将 AstrBot 后台口令设为默认（astrbot）")
 
 # 后台只监听本机。默认 0.0.0.0 在 proot 下等于对同网段开放，
 # 而它的口令是固定的 astrbot——不收紧就是白送一个后台入口。
