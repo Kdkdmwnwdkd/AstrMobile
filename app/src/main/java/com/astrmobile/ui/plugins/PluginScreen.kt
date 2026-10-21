@@ -1,5 +1,6 @@
 package com.astrmobile.ui.plugins
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,10 +24,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -57,6 +60,7 @@ import kotlinx.coroutines.launch
  * 表情包、情感记忆、主动聊天这些都是插件，不是 App 内建功能。
  * 电脑版在后台的「插件管理」里装，这里把同一件事搬进 App。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PluginScreen(
     viewModel: MainViewModel,
@@ -78,6 +82,8 @@ fun PluginScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
     var needRestart by remember { mutableStateOf(false) }
+    var detail by remember { mutableStateOf<MarketPlugin?>(null) }
+    var limit by remember { mutableIntStateOf(80) }
 
     // 装完/删完插件，用户多半直接返回，不会去点"重启"。
     // 离开页面时替他重启，避免"装了但没生效"。连续装多个只会重启一次。
@@ -95,6 +101,31 @@ fun PluginScreen(
         }
     }
 
+    fun startInstall(plugin: MarketPlugin) {
+        if (installingId != null) return
+        installingId = plugin.id
+        message = null
+        needRestart = false
+        scope.launch {
+            val result = viewModel.installPlugin(plugin) { line -> progressText = line }
+            installingId = null
+            progressText = ""
+            result.fold(
+                onSuccess = {
+                    isError = false
+                    message = "已安装 ${plugin.displayName}"
+                    needRestart = true
+                    refreshInstalled()
+                },
+                onFailure = { error ->
+                    isError = true
+                    message = error.message ?: "安装失败"
+                    needRestart = false
+                },
+            )
+        }
+    }
+
     LaunchedEffect(Unit) {
         refreshInstalled()
         viewModel.loadPluginMarket().fold(
@@ -103,17 +134,17 @@ fun PluginScreen(
         )
     }
 
-    val filtered = remember(market, query) {
+    val filtered = remember(market, query, limit) {
         val all = market.orEmpty()
         val q = query.trim()
         when {
-            q.isEmpty() -> all.take(80)
+            q.isEmpty() -> all.take(limit)
             else -> all.filter { item ->
                 item.displayName.contains(q, ignoreCase = true) ||
                     item.id.contains(q, ignoreCase = true) ||
                     item.description.contains(q, ignoreCase = true) ||
                     item.tags.any { it.contains(q, ignoreCase = true) }
-            }.take(80)
+            }.take(limit)
         }
     }
 
@@ -227,33 +258,20 @@ fun PluginScreen(
                                 plugin = plugin,
                                 installed = alreadyInstalled,
                                 installing = installingId == plugin.id,
-                                onInstall = {
-                                    if (installingId != null) return@MarketRow
-                                    installingId = plugin.id
-                                    message = null
-                                    needRestart = false
-                                    scope.launch {
-                                        val result = viewModel.installPlugin(plugin) { line ->
-                                            progressText = line
-                                        }
-                                        installingId = null
-                                        progressText = ""
-                                        result.fold(
-                                            onSuccess = {
-                                                isError = false
-                                                message = "已安装 ${plugin.displayName}"
-                                                needRestart = true
-                                                refreshInstalled()
-                                            },
-                                            onFailure = { error ->
-                                                isError = true
-                                                message = error.message ?: "安装失败"
-                                                needRestart = false
-                                            },
-                                        )
-                                    }
-                                },
+                                onInstall = { startInstall(plugin) },
+                                onOpenDetail = { detail = plugin },
                             )
+                        }
+                        val total = market?.size ?: 0
+                        if (filtered.size >= limit && total > filtered.size) {
+                            item(key = "load-more") {
+                                TextButton(
+                                    onClick = { limit += 80 },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("加载更多（还有 ${total - filtered.size} 个）")
+                                }
+                            }
                         }
                     } else {
                         if (failed.isNotEmpty()) {
@@ -304,6 +322,81 @@ fun PluginScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             lineHeight = 16.sp,
         )
+    }
+
+    // ---------------------------------------------------------- 插件详情
+    // 列表里的简介只有两行，完整的描述、作者、仓库放到弹层里看
+    detail?.let { plugin ->
+        val alreadyInstalled = installed.any { it.dirName == repoDir(plugin.repo) }
+        ModalBottomSheet(onDismissRequest = { detail = null }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+            ) {
+                Text(
+                    text = plugin.displayName,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = buildString {
+                        append("★ ${plugin.stars}")
+                        if (plugin.version.isNotBlank()) append(" · v${plugin.version}")
+                        if (plugin.author.isNotBlank()) append(" · ${plugin.author}")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = plugin.description.ifBlank { "这个插件没有写简介。" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = 22.sp,
+                )
+
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = "仓库：${plugin.repo}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 18.sp,
+                )
+                if (plugin.tags.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "标签：${plugin.tags.joinToString(" / ")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Spacer(Modifier.height(18.dp))
+                if (alreadyInstalled) {
+                    OutlinedButton(onClick = { detail = null }, modifier = Modifier.fillMaxWidth()) {
+                        Text("已安装，去看「已安装」")
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            detail = null
+                            startInstall(plugin)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = installingId == null,
+                    ) {
+                        Text("安装这个插件")
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -373,13 +466,16 @@ private fun MarketRow(
     installed: Boolean,
     installing: Boolean,
     onInstall: () -> Unit,
+    onOpenDetail: () -> Unit,
 ) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         ),
         shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpenDetail),
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
