@@ -20,9 +20,11 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -86,6 +88,8 @@ fun ModelScreen(
     var saved by remember { mutableStateOf(false) }
     var needsRestart by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
+    var actingId by remember { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf<ConfiguredModel?>(null) }
 
     // 已经配过的话，把接口地址和模型名回填，用户换 Key 时不用重填全部。
     LaunchedEffect(models) {
@@ -117,50 +121,58 @@ fun ModelScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        // ---------------------------------------------------------- 当前状态
-        val current = models?.firstOrNull()
-        SectionCard(title = "当前状态") {
+        // ---------------------------------------------------------- 模型列表
+        val current = models?.firstOrNull { it.enabled } ?: models?.firstOrNull()
+        SectionCard(title = "已配置的模型") {
             when {
                 models == null -> Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.size(10.dp))
                     Text("正在读取配置…", style = MaterialTheme.typography.bodyMedium)
                 }
-                current == null -> Text(
+                models.isNullOrEmpty() -> Text(
                     text = "还没有配置模型。机器人能收到 QQ 消息，但不会回复。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                     lineHeight = 19.sp,
                 )
                 else -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.size(8.dp))
-                        Text(
-                            text = "已配置：${current.model}",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "${current.apiBase}\n密钥 ${current.keyHint}",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 17.sp,
-                    )
-                    if (!current.enabled) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "该模型当前是禁用状态，保存一次即可重新启用。",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
-                            color = MaterialTheme.colorScheme.error,
+                    models.orEmpty().forEachIndexed { index, item ->
+                        if (index > 0) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
+                        }
+                        ModelRow(
+                            model = item,
+                            isActive = item.enabled,
+                            busy = actingId == item.id,
+                            onActivate = {
+                                actingId = item.id
+                                message = null
+                                scope.launch {
+                                    val result = viewModel.activateModel(item.id)
+                                    actingId = null
+                                    result.fold(
+                                        onSuccess = { isError = false; message = it.message; reloadKey++ },
+                                        onFailure = { isError = true; message = it.message ?: "切换失败" },
+                                    )
+                                }
+                            },
+                            onToggle = {
+                                actingId = item.id
+                                message = null
+                                scope.launch {
+                                    val result = viewModel.setModelEnabled(item.id, !item.enabled)
+                                    actingId = null
+                                    result.fold(
+                                        onSuccess = { isError = false; message = it.message; reloadKey++ },
+                                        onFailure = { isError = true; message = it.message ?: "操作失败" },
+                                    )
+                                }
+                            },
+                            onDelete = { pendingDelete = item },
                         )
                     }
                 }
@@ -171,7 +183,10 @@ fun ModelScreen(
 
         // ---------------------------------------------------------- 表单
         SectionCard(title = "添加或替换") {
-            HintText("选一个厂商会自动填好接口地址和模型名，你只需要贴 API Key。")
+            HintText(
+                "选厂商会自动填好接口地址和模型名，贴 Key 即可。可以存多个，点「设为使用中」切换。" +
+                    "Agnes 目前免费（限 20 次/分钟），适合先跑起来，但免费策略随时可能变，别当唯一方案。",
+            )
             Spacer(Modifier.height(10.dp))
 
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -287,7 +302,7 @@ fun ModelScreen(
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
                 } else {
-                    Text("保存")
+                    Text("保存并设为当前")
                 }
             }
 
@@ -347,40 +362,111 @@ fun ModelScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        if (current != null) {
-            SectionCard(title = "移除") {
-                HintText("移除后机器人会重新变成「收到消息但不回复」。")
-                Spacer(Modifier.height(10.dp))
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            viewModel.removeModel().fold(
-                                onSuccess = { outcome ->
-                                    reloadKey++
-                                    isError = false
-                                    saved = false
-                                    message = outcome.message
-                                },
-                                onFailure = {
-                                    isError = true
-                                    message = it.message ?: "移除失败"
-                                },
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("删除当前模型", color = MaterialTheme.colorScheme.error)
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-        }
-
         Text(
-            text = "密钥只写入本机容器内的配置文件，不会上传到任何地方。",
+            text = "可以保存多个模型，同一时间只有一个处于「使用中」。密钥只写入本机容器，不会上传。",
             style = MaterialTheme.typography.bodyMedium.copy(fontSize = 11.sp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 16.sp,
         )
+    }
+
+    // ---------------------------------------------------------- 删除确认
+    pendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("删除这个模型？") },
+            text = {
+                Text(
+                    "「${target.model}」会从 AstrBot 里删掉。如果它是当前使用中的模型，" +
+                        "机器人会变成收到消息但不回复，直到你启用另一个。",
+                    lineHeight = 20.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDelete = null
+                    actingId = target.id
+                    message = null
+                    scope.launch {
+                        val result = viewModel.removeModel(target.id)
+                        actingId = null
+                        result.fold(
+                            onSuccess = {
+                                isError = false
+                                saved = false
+                                reloadKey++
+                                message = it.message
+                            },
+                            onFailure = {
+                                isError = true
+                                message = it.message ?: "删除失败"
+                            },
+                        )
+                    }
+                }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
+            },
+        )
+    }
+}
+
+/** 模型列表里的一行：名字、地址、密钥掩码，以及三个操作。 */
+@Composable
+private fun ModelRow(
+    model: ConfiguredModel,
+    isActive: Boolean,
+    busy: Boolean,
+    onActivate: () -> Unit,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = model.model.ifBlank { "未命名模型" },
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            if (isActive) {
+                Text(
+                    text = "使用中",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = buildString {
+                append(model.apiBase.ifBlank { "未填接口地址" })
+                if (model.keyHint.isNotBlank()) append("\n密钥 ${model.keyHint}")
+            },
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = FontFamily.Monospace,
+            lineHeight = 17.sp,
+        )
+
+        Spacer(Modifier.height(2.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (!isActive) {
+                TextButton(onClick = onActivate, enabled = !busy) { Text("设为使用中") }
+            }
+            TextButton(onClick = onToggle, enabled = !busy) {
+                Text(if (model.enabled) "停用" else "启用")
+            }
+            TextButton(onClick = onDelete, enabled = !busy) {
+                Text("删除", color = MaterialTheme.colorScheme.error)
+            }
+            if (busy) {
+                Spacer(Modifier.size(6.dp))
+                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+            }
+        }
     }
 }

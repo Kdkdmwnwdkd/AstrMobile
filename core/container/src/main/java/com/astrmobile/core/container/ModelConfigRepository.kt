@@ -19,6 +19,8 @@ enum class ModelPreset(
     val apiBase: String,
     val model: String,
 ) {
+    // Agnes 国内站：免费额度随时可能调整，先在第一个方便试
+    Agnes("Agnes（免费）", "https://api.agnes-ai.cn/v1", "agnes-2.5-flash"),
     DeepSeek("DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat"),
     OpenAI("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"),
     Zhipu("智谱 GLM", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash"),

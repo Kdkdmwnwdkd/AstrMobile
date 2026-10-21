@@ -167,8 +167,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val providers = AstrBotApi().listProviders(cookie).getOrNull() ?: return null
         return providers
             .filter { it.providerType.isBlank() || it.providerType == "chat_completion" }
-            // 自己配的那条排最前，界面默认展示它
-            .sortedBy { if (it.id == ModelConfigRepository.PROVIDER_ID) 0 else 1 }
+            // 启用的排前面：那才是实际在用的
+            .sortedWith(compareByDescending<AstrBotApi.RemoteProvider> { it.enabled }.thenBy { it.id })
             .map {
                 ConfiguredModel(
                     id = it.id,
@@ -183,33 +183,89 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * 保存模型：先走 AstrBot 的 provider 接口（热生效、由它自己落盘），
      * 失败才退回“写配置文件 + 提示重启”。
+     *
+     * 接口地址和模型名都相同的已有配置会被覆盖，其余模型保持不动，
+     * 所以可以存多个，互不影响。
      */
-    suspend fun saveModel(apiBase: String, apiKey: String, model: String): Result<ModelSaveOutcome> =
-        withContext(Dispatchers.IO) {
-            val cookie = loginAstrBot().getOrNull()
-            if (cookie != null) {
-                val saved = AstrBotApi().saveChatProvider(
-                    cookie = cookie,
-                    id = ModelConfigRepository.PROVIDER_ID,
-                    apiBase = apiBase,
-                    apiKey = apiKey,
-                    model = model,
-                )
-                if (saved.isSuccess) {
-                    return@withContext Result.success(ModelSaveOutcome(false, "已保存，已经立即生效"))
-                }
-            }
-
-            ModelConfigRepository.save(appContainer.paths, apiBase, apiKey, model)
-                .map { ModelSaveOutcome(true, "配置已写入，重启容器后生效") }
-        }
-
-    suspend fun removeModel(): Result<ModelSaveOutcome> = withContext(Dispatchers.IO) {
+    suspend fun saveModel(
+        apiBase: String,
+        apiKey: String,
+        model: String,
+        makeActive: Boolean = true,
+    ): Result<ModelSaveOutcome> = withContext(Dispatchers.IO) {
         val cookie = loginAstrBot().getOrNull()
         if (cookie != null) {
-            val removed = AstrBotApi().deleteProvider(cookie, ModelConfigRepository.PROVIDER_ID)
+            val api = AstrBotApi()
+            val providers = api.listProviders(cookie).getOrNull().orEmpty()
+            val existing = providers.firstOrNull {
+                it.apiBase.trimEnd('/').equals(apiBase.trimEnd('/'), ignoreCase = true) &&
+                    it.model.trim().equals(model.trim(), ignoreCase = true)
+            }
+            val id = existing?.id ?: newProviderId()
+
+            val saved = api.saveChatProvider(cookie, id, apiBase, apiKey, model)
+            if (saved.isSuccess) {
+                if (makeActive) activateInternal(api, cookie, id, providers)
+                val message = if (makeActive) "已保存，并设为当前使用的模型" else "已保存"
+                return@withContext Result.success(ModelSaveOutcome(false, message))
+            }
+        }
+
+        ModelConfigRepository.save(appContainer.paths, apiBase, apiKey, model)
+            .map { ModelSaveOutcome(true, "配置已写入，重启容器后生效") }
+    }
+
+    /** 生成一个不会撞车的 provider id；同地址同模型的会复用旧 id，不会重复添加。 */
+    private fun newProviderId(): String =
+        "astrmobile_" + System.currentTimeMillis().toString(36)
+
+    /**
+     * 把某个模型设为“当前使用”：启用它，并禁用其他对话模型。
+     *
+     * AstrBot 没设默认模型时会退回到第一个启用的 provider，因此这个做法
+     * 等价于切换默认模型，又不用碰系统配置（GET 回来的 Key 是脱敏的，
+     * 全量回写会把 Key 冲掉）。
+     */
+    private suspend fun activateInternal(
+        api: AstrBotApi,
+        cookie: String,
+        targetId: String,
+        providers: List<AstrBotApi.RemoteProvider>,
+    ) {
+        api.setProviderEnabled(cookie, targetId, true)
+        providers
+            .filter {
+                it.id != targetId && it.enabled &&
+                    (it.providerType.isBlank() || it.providerType == "chat_completion")
+            }
+            .forEach { api.setProviderEnabled(cookie, it.id, false) }
+    }
+
+    suspend fun activateModel(id: String): Result<ModelSaveOutcome> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrNull()
+            ?: return@withContext Result.failure(IllegalStateException("登录 AstrBot 后台失败，容器在运行吗？"))
+        val api = AstrBotApi()
+        val providers = api.listProviders(cookie).getOrElse {
+            return@withContext Result.failure(it)
+        }
+        activateInternal(api, cookie, id, providers)
+        Result.success(ModelSaveOutcome(false, "已切换，新消息会走这个模型"))
+    }
+
+    suspend fun setModelEnabled(id: String, enabled: Boolean): Result<ModelSaveOutcome> =
+        withContext(Dispatchers.IO) {
+            val cookie = loginAstrBot().getOrNull()
+                ?: return@withContext Result.failure(IllegalStateException("登录 AstrBot 后台失败，容器在运行吗？"))
+            AstrBotApi().setProviderEnabled(cookie, id, enabled)
+                .map { ModelSaveOutcome(false, if (enabled) "已启用" else "已停用") }
+        }
+
+    suspend fun removeModel(id: String): Result<ModelSaveOutcome> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrNull()
+        if (cookie != null) {
+            val removed = AstrBotApi().deleteProvider(cookie, id)
             if (removed.isSuccess) {
-                return@withContext Result.success(ModelSaveOutcome(false, "已删除，已经立即生效"))
+                return@withContext Result.success(ModelSaveOutcome(false, "已删除"))
             }
         }
         ModelConfigRepository.remove(appContainer.paths)
@@ -217,7 +273,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** 真正发一次请求验证 Key 能不能用——这是“到底生效没有”的唯一可靠答案。 */
-    suspend fun testModel(): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun testModel(id: String? = null): Result<String> = withContext(Dispatchers.IO) {
         val cookie = loginAstrBot().getOrNull()
             ?: return@withContext Result.failure(
                 IllegalStateException(
@@ -227,12 +283,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val providers = AstrBotApi().listProviders(cookie).getOrElse {
             return@withContext Result.failure(it)
         }
-        if (providers.none { it.id == ModelConfigRepository.PROVIDER_ID }) {
-            return@withContext Result.failure(
+        val target = id?.let { wanted -> providers.firstOrNull { it.id == wanted } }
+            ?: providers.firstOrNull { it.enabled }
+            ?: providers.firstOrNull()
+            ?: return@withContext Result.failure(
                 IllegalStateException("还没有保存模型，先点一次「保存」"),
             )
-        }
-        AstrBotApi().testProvider(cookie, ModelConfigRepository.PROVIDER_ID)
+        AstrBotApi().testProvider(cookie, target.id)
     }
 
     // ---------------------------------------------------------------- 插件

@@ -498,6 +498,30 @@ class AstrBotApi(private val port: Int = 6185) {
         }
     }
 
+    /**
+     * 启用/禁用一个模型。
+     *
+     * AstrBot 选模型时，如果没设"默认模型"，会退回到**第一个启用的** chat provider。
+     * 所以"切换当前模型"可以安全地实现为：启用目标、禁用其余——不用去改系统配置
+     * （那条路要全量 PUT 配置，而 GET 回来的 Key 是脱敏的，回写会把 Key 覆盖掉）。
+     */
+    suspend fun setProviderEnabled(cookie: String, id: String, enabled: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("provider_id", id)
+                .put("enabled", enabled)
+                .toString()
+            val response = request("PATCH", "/providers/enabled", body, cookie)
+                ?: return@withContext Result.failure(IllegalStateException("切换失败：AstrBot 没有响应"))
+
+            if (!response.ok) {
+                return@withContext Result.failure(
+                    IllegalStateException(response.message.ifBlank { "切换失败（HTTP ${response.code}）" }),
+                )
+            }
+            Result.success(Unit)
+        }
+
     suspend fun deleteProvider(cookie: String, id: String): Result<Unit> = withContext(Dispatchers.IO) {
         val response = request("DELETE", "/providers/by-id?provider_id=${encode(id)}", null, cookie)
             ?: return@withContext Result.failure(IllegalStateException("删除失败：AstrBot 没有响应"))
