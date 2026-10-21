@@ -24,6 +24,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -71,8 +72,14 @@ fun QrCodeScreen(
     var isSuccess by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(tokens, reloadKey) {
-        val candidates = tokens ?: return@LaunchedEffect
+    // 自动读到口令失败时，允许手动填一次（NapCat 装在非常规路径时会发生）
+    var extraToken by remember { mutableStateOf<String?>(null) }
+    var showManual by remember { mutableStateOf(false) }
+    var manualInput by remember { mutableStateOf("") }
+
+    LaunchedEffect(tokens, extraToken, reloadKey) {
+        val base = tokens ?: return@LaunchedEffect
+        val candidates = (base + listOfNotNull(extraToken?.takeIf { it.isNotBlank() })).distinct()
         if (candidates.isEmpty()) {
             statusText = "还没读到 NapCat 的口令，请确认容器已启动并稍等 30 秒"
             isError = true
@@ -102,22 +109,47 @@ fun QrCodeScreen(
             statusText = buildString {
                 append("登录 NapCat 失败：")
                 append(lastError.ifBlank { "口令不匹配" })
-                append("\n点「重启机器人」后再进来；仍失败就把这段发我。")
+                append("\n试过的口令：")
+                append(candidates.joinToString("、") { it.take(4) + "***" })
             }
             isError = true
+            showManual = true
             return@LaunchedEffect
         }
 
         statusText = "正在获取二维码…"
-        val rawQrcode = api.fetchQrcode(credential).getOrElse { error ->
-            val message = error.message.orEmpty()
+        // NapCat 首次生成二维码要先拉 QQ 客户端，头几次可能返回
+        // "QRCode Get Error"。这属于「还没准备好」，重试几次就好了。
+        var rawQrcode: String? = null
+        var qrError = ""
+        for (attempt in 1..3) {
+            val result = api.fetchQrcode(credential)
+            if (result.isSuccess) {
+                rawQrcode = result.getOrNull()
+                break
+            }
+            qrError = result.exceptionOrNull()?.message.orEmpty()
+            if (qrError.contains("Is Logined", ignoreCase = true)) break
+            if (attempt < 3) {
+                statusText = "NapCat 正在准备二维码…（第 $attempt 次）"
+                delay(2_000)
+            }
+        }
+
+        if (rawQrcode == null) {
             // 已经登录过时 NapCat 会直接拒绝发码，这不是故障。
-            if (message.contains("Is Logined", ignoreCase = true)) {
+            if (qrError.contains("Is Logined", ignoreCase = true)) {
                 statusText = "这个 QQ 已经登录了，无需再扫码"
                 isSuccess = true
             } else {
-                statusText = "获取二维码失败：$message"
+                statusText = buildString {
+                    append("获取二维码失败：")
+                    append(qrError.ifBlank { "NapCat 没给二维码" })
+                    append("\n试过的口令：")
+                    append(candidates.joinToString("、") { it.take(4) + "***" })
+                }
                 isError = true
+                showManual = true
             }
             return@LaunchedEffect
         }
@@ -262,6 +294,43 @@ fun QrCodeScreen(
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        // 自动读口令失败时的兜底：NapCat 装在非常规路径、或口令被改过时，
+        // 用户可以从日志里翻到口令，在这里手动填一次。
+        if (showManual && !isSuccess) {
+            Spacer(Modifier.height(14.dp))
+            SectionCard(title = "手动输入 NapCat 口令") {
+                Text(
+                    text = "去「实时日志」搜 WebUi 或 Token，通常会看到一串口令；" +
+                        "也可以在 NapCat 网页版的登录提示里找。填进来再试一次。",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 17.sp,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = manualInput,
+                    onValueChange = { manualInput = it },
+                    label = { Text("口令", fontSize = 12.sp) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = {
+                        if (manualInput.isNotBlank()) {
+                            extraToken = manualInput.trim()
+                            reloadKey++
+                        }
+                    },
+                    enabled = manualInput.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                ) { Text("用这个口令重试") }
             }
         }
 
