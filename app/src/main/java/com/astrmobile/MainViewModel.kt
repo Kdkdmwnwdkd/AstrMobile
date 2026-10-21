@@ -334,13 +334,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun listPersonas(cookie: String): Result<List<PersonaItem>> =
         withContext(Dispatchers.IO) { AstrBotApi().listPersonas(cookie) }
 
+    /**
+     * 当前真正生效的默认人格 id。
+     *
+     * 一般在 `agent_runner.config.persona.persona_id` 里，AstrBot 默认值叫 "default"，
+     * 但用户在后台换过就会是别的 id。读不到一律退回 "default"。
+     */
+    suspend fun defaultPersonaId(): String = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrNull() ?: return@withContext "default"
+        val body = AstrBotApi().getSystemConfig(cookie).getOrNull() ?: return@withContext "default"
+        val root = body.optJSONObject("data")?.optJSONObject("config")
+            ?: body.optJSONObject("config")
+            ?: body.optJSONObject("data")
+            ?: body
+        root.optJSONObject("agent_runner")
+            ?.optJSONObject("config")
+            ?.optJSONObject("persona")
+            ?.optString("persona_id")
+            ?.takeIf { it.isNotBlank() }
+            ?: "default"
+    }
+
+    /**
+     * 保存人格，并从服务端读回来核对。
+     *
+     * AstrBot 的保存接口返回 ok 不代表内容真的写进去了（字段被忽略、写到
+     * 别的人格上，都只表现为"保存成功"）。这里当面比对一次，不一致就直接
+     * 报错，而不是让用户重启完发现还是老样子。
+     */
     suspend fun savePersona(
         cookie: String,
         id: String,
         prompt: String,
         exists: Boolean,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        AstrBotApi().savePersona(cookie, id, prompt, exists)
+        val api = AstrBotApi()
+        val saved = api.savePersona(cookie, id, prompt, exists)
+        if (saved.isFailure) return@withContext saved
+
+        val actual = api.listPersonas(cookie).getOrNull()
+            ?.firstOrNull { it.id == id }
+            ?.systemPrompt
+            ?.trim()
+        if (actual != prompt.trim()) {
+            return@withContext Result.failure(
+                IllegalStateException(
+                    "保存后读回来的内容对不上（服务端是 ${actual?.length ?: 0} 字，" +
+                        "你提交了 ${prompt.trim().length} 字）。AstrBot 没有接受这次修改，" +
+                        "去「AstrBot 后台 → 人格」看一眼这条是否存在。",
+                ),
+            )
+        }
+        Result.success(Unit)
     }
 
     suspend fun listConversations(cookie: String): Result<List<ConversationSummary>> =

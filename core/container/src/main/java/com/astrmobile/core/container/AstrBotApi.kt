@@ -499,6 +499,23 @@ class AstrBotApi(private val port: Int = 6185) {
     }
 
     /**
+     * 读整份系统配置（只读）。
+     *
+     * 用来回答"现在真正生效的默认人格是哪一个"。只读取、不回写：
+     * 这份配置里的 Key 是脱敏的，整份 PUT 回去会把真实 Key 覆盖掉。
+     */
+    suspend fun getSystemConfig(cookie: String): Result<JSONObject> = withContext(Dispatchers.IO) {
+        val response = request("GET", "/system-config", null, cookie)
+            ?: return@withContext Result.failure(IllegalStateException("读取系统配置失败：AstrBot 没有响应"))
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "读取系统配置失败（HTTP ${response.code}）" }),
+            )
+        }
+        Result.success(response.body ?: JSONObject())
+    }
+
+    /**
      * 启用/禁用一个模型。
      *
      * AstrBot 选模型时，如果没设"默认模型"，会退回到**第一个启用的** chat provider。

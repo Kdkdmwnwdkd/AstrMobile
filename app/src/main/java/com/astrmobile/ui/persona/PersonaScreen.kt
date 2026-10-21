@@ -109,10 +109,15 @@ fun PersonaScreen(
         viewModel.listPersonas(session).fold(
             onSuccess = { list ->
                 personas = list
-                // AstrBot 的默认人格 id 固定是 "default"，优先改它；
-                // 否则用户自建了别的人格时，改半天改的不是实际生效的那条。
+                // 优先选中「真正在生效的那个」：AstrBot 默认人格 id 一般是 default，
+                // 但用户在后台换过就不是了。改错对象是"保存了没变化"最常见的原因。
                 if (selected == null) {
-                    (list.firstOrNull { it.id == "default" } ?: list.firstOrNull())?.let {
+                    val defaultId = viewModel.defaultPersonaId()
+                    (
+                        list.firstOrNull { it.id == defaultId }
+                            ?: list.firstOrNull { it.id == "default" }
+                            ?: list.firstOrNull()
+                        )?.let {
                         selected = it
                         draft = it.systemPrompt
                     }
