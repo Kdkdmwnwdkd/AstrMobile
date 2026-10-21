@@ -499,6 +499,49 @@ class AstrBotApi(private val port: Int = 6185) {
     }
 
     /**
+     * 加载失败的插件：目录名 → 错误信息。
+     *
+     * 插件目录存在不等于加载成功——缺依赖、版本不兼容都会让它出现在这里。
+     * App 的"已安装"列表只看了目录，所以必须再问一次运行时状态。
+     */
+    suspend fun listFailedPlugins(cookie: String): Result<Map<String, String>> =
+        withContext(Dispatchers.IO) {
+            val response = request("GET", "/plugins/failed", null, cookie)
+                ?: return@withContext Result.failure(IllegalStateException("读取插件状态失败：AstrBot 没有响应"))
+            if (!response.ok) {
+                return@withContext Result.failure(
+                    IllegalStateException(response.message.ifBlank { "读取插件状态失败（HTTP ${response.code}）" }),
+                )
+            }
+
+            val failed = linkedMapOf<String, String>()
+            fun readMessage(value: Any?): String = when (value) {
+                is JSONObject -> value.optString("error")
+                    .ifBlank { value.optString("message") }
+                    .ifBlank { value.optString("exception") }
+                    .ifBlank { value.optString("traceback").take(200) }
+                is String -> value
+                null -> ""
+                else -> value.toString()
+            }
+
+            when (val data = response.data) {
+                is JSONObject -> data.keys().forEach { key ->
+                    failed[key] = readMessage(data.opt(key))
+                }
+                is JSONArray -> for (index in 0 until data.length()) {
+                    val item = data.optJSONObject(index) ?: continue
+                    val name = item.optString("name")
+                        .ifBlank { item.optString("dir_name") }
+                        .ifBlank { item.optString("plugin_id") }
+                    if (name.isNotBlank()) failed[name] = readMessage(item)
+                }
+                else -> Unit
+            }
+            Result.success(failed)
+        }
+
+    /**
      * 读整份系统配置（只读）。
      *
      * 用来回答"现在真正生效的默认人格是哪一个"。只读取、不回写：

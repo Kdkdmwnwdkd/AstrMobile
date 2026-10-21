@@ -301,6 +301,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         runCatching { PluginRepository.listInstalled(appContainer.paths) }.getOrDefault(emptyList())
     }
 
+    /**
+     * 哪些插件没加载起来。
+     *
+     * 目录里有不等于加载成功，这是两回事：插件可能缺 Python 依赖、
+     * 版本不兼容、初始化抛异常。只有运行时知道自己栽了。
+     */
+    suspend fun loadFailedPlugins(): Map<String, String> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrNull() ?: return@withContext emptyMap()
+        AstrBotApi().listFailedPlugins(cookie).getOrDefault(emptyMap())
+    }
+
     suspend fun installPlugin(
         plugin: MarketPlugin,
         onProgress: (String) -> Unit,

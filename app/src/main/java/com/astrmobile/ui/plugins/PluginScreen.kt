@@ -70,6 +70,7 @@ fun PluginScreen(
     var query by remember { mutableStateOf("") }
     var market by remember { mutableStateOf<List<MarketPlugin>?>(null) }
     var installed by remember { mutableStateOf<List<InstalledPlugin>>(emptyList()) }
+    var failed by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var installingId by remember { mutableStateOf<String?>(null) }
     var progressText by remember { mutableStateOf("") }
@@ -86,7 +87,11 @@ fun PluginScreen(
     }
 
     fun refreshInstalled() {
-        scope.launch { installed = viewModel.listInstalledPlugins() }
+        scope.launch {
+            installed = viewModel.listInstalledPlugins()
+            // 目录里有，不代表加载成功；失败的要从运行时接口单独问
+            failed = viewModel.loadFailedPlugins()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -249,9 +254,21 @@ fun PluginScreen(
                             )
                         }
                     } else {
+                        if (failed.isNotEmpty()) {
+                            item(key = "failed-summary") {
+                                Text(
+                                    text = "有 ${failed.size} 个插件没加载起来，下面标红的会写明原因",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
+                                    color = MaterialTheme.colorScheme.error,
+                                    lineHeight = 17.sp,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                                )
+                            }
+                        }
                         items(installed, key = { it.dirName }) { plugin ->
                             InstalledRow(
                                 plugin = plugin,
+                                error = failureFor(plugin.dirName, failed),
                                 onConfigure = { onOpenConfig(plugin.dirName) },
                                 onUninstall = {
                                     scope.launch {
@@ -424,6 +441,7 @@ private fun MarketRow(
 @Composable
 private fun InstalledRow(
     plugin: InstalledPlugin,
+    error: String? = null,
     onConfigure: () -> Unit,
     onUninstall: () -> Unit,
 ) {
@@ -455,6 +473,17 @@ private fun InstalledRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (!error.isNullOrBlank()) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = "加载失败：${error.take(120)}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.error,
+                        lineHeight = 14.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             TextButton(onClick = onConfigure) {
                 Text("配置", fontSize = 11.sp)
@@ -469,3 +498,17 @@ private fun InstalledRow(
 /** 从仓库地址推出安装目录名（GitHub 上的仓库名）。 */
 private fun repoDir(repo: String): String =
     repo.trim().removeSuffix("/").removeSuffix(".git").substringAfterLast('/')
+
+/**
+ * 把运行时报告的失败信息对到某个目录上。
+ *
+ * AstrBot 的 key 有时是插件名、有时是目录名，两者不一定完全一致，所以先精确比、再模糊比。
+ */
+private fun failureFor(dirName: String, failed: Map<String, String>): String? {
+    failed[dirName]?.let { return it }
+    return failed.entries.firstOrNull { (key, _) ->
+        key.equals(dirName, ignoreCase = true) ||
+            key.contains(dirName, ignoreCase = true) ||
+            dirName.contains(key, ignoreCase = true)
+    }?.value?.takeIf { it.isNotBlank() }
+}
