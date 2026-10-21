@@ -21,7 +21,9 @@ enum class ModelPreset(
 ) {
     // Agnes 国内站：免费额度随时可能调整，先在第一个方便试
     Agnes("Agnes（免费）", "https://api.agnes-ai.cn/v1", "agnes-2.5-flash"),
-    DeepSeek("DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat"),
+    // deepseek-chat 这个别名在 2026-07-24 已退役，现行模型名是 deepseek-flash
+    // （V4.1-Flash），原生支持图片输入，「看屏幕」靠它
+    DeepSeek("DeepSeek（可看图）", "https://api.deepseek.com/v1", "deepseek-flash"),
     OpenAI("OpenAI", "https://api.openai.com/v1", "gpt-4o-mini"),
     Zhipu("智谱 GLM", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash"),
     Qwen("通义千问", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus"),

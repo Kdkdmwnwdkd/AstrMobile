@@ -258,7 +258,7 @@ fun ModelScreen(
                 value = modelName,
                 onValueChange = { modelName = it },
                 label = { Text("模型名") },
-                placeholder = { Text("deepseek-chat") },
+                placeholder = { Text("deepseek-flash") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),

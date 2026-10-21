@@ -5,6 +5,7 @@ import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerController
 import com.astrmobile.core.container.ContainerPaths
 import com.astrmobile.core.data.SettingsRepository
+import com.astrmobile.core.data.VisionStore
 import java.io.File
 
 /**
@@ -27,6 +28,9 @@ class AppContainer(context: Context) {
     )
 
     val settings: SettingsRepository = SettingsRepository(appContext)
+
+    /** 看屏幕要直连模型，顺手存一份加密凭据。 */
+    val vision: VisionStore = VisionStore(appContext)
 
     val controller: ContainerController = ContainerController(appContext, paths)
 

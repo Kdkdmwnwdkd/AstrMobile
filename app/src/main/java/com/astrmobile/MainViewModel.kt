@@ -26,7 +26,9 @@ import com.astrmobile.core.container.PluginConfigSnapshot
 import com.astrmobile.core.container.PluginRepository
 import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
+import com.astrmobile.core.container.VisionApi
 import com.astrmobile.core.data.AppSettings
+import com.astrmobile.core.data.VisionConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +53,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val controller = appContainer.controller
     private val bootstrapper = appContainer.bootstrapper
     private val settingsRepository = appContainer.settings
+    private val visionStore = appContainer.vision
 
     val containerState: StateFlow<ContainerState> = controller.state
     val logs: StateFlow<List<String>> = controller.logs
@@ -206,12 +209,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val saved = api.saveChatProvider(cookie, id, apiBase, apiKey, model)
             if (saved.isSuccess) {
                 if (makeActive) activateInternal(api, cookie, id, providers)
+                // 顺手留一份加密凭据：看屏幕要直连模型，而 AstrBot 返回的 Key 是脱敏的
+                visionStore.save(VisionConfig(apiBase.trimEnd('/'), model.trim(), apiKey.trim()))
                 val message = if (makeActive) "已保存，并设为当前使用的模型" else "已保存"
                 return@withContext Result.success(ModelSaveOutcome(false, message))
             }
         }
 
         ModelConfigRepository.save(appContainer.paths, apiBase, apiKey, model)
+            .onSuccess {
+                visionStore.save(VisionConfig(apiBase.trimEnd('/'), model.trim(), apiKey.trim()))
+            }
             .map { ModelSaveOutcome(true, "配置已写入，重启容器后生效") }
     }
 
@@ -291,6 +299,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         AstrBotApi().testProvider(cookie, target.id)
     }
+
+    // -------------------------------------------------------------- 看屏幕
+
+    /** 当前可用于看图的模型（保存模型时留下的那份凭据）。 */
+    suspend fun visionTarget(): VisionConfig? = withContext(Dispatchers.IO) { visionStore.load() }
+
+    /**
+     * 把一张截图交给模型，让它描述画面。
+     *
+     * 只读本地那份凭据，不经过 AstrBot——它的接口没有"发任意图片问一句"的入口。
+     * 截图在这里只存在于内存，发完即弃。
+     */
+    suspend fun describeScreen(jpeg: ByteArray, prompt: String): Result<String> =
+        withContext(Dispatchers.IO) {
+            val config = visionStore.load()
+                ?: return@withContext Result.failure(
+                    IllegalStateException(
+                        "App 里还没有可用的模型凭据。\n去「模型」页把 Key 重新保存一次，" +
+                            "之后这里就能直接看图了。",
+                    ),
+                )
+            VisionApi().describe(
+                apiBase = config.apiBase,
+                apiKey = config.apiKey,
+                model = config.model,
+                jpeg = jpeg,
+                prompt = prompt,
+            )
+        }
 
     // ---------------------------------------------------------------- 插件
 
