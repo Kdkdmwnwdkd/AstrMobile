@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.astrmobile.MainViewModel
 import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.SectionCard
+import com.astrmobile.ui.components.shareDiagnostics
 import kotlinx.coroutines.launch
 
 @Composable
@@ -54,6 +56,7 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var aptMirror by remember(settings.aptMirror) { mutableStateOf(settings.aptMirror) }
     var pipIndex by remember(settings.pipIndex) { mutableStateOf(settings.pipIndex) }
@@ -157,7 +160,6 @@ fun SettingsScreen(
                     "点下面的按钮，把本应用加入电池优化白名单。",
             )
             Spacer(Modifier.height(12.dp))
-            val context = LocalContext.current
             Button(
                 onClick = { requestIgnoreBatteryOptimization(context) },
                 modifier = Modifier.fillMaxWidth(),
@@ -170,6 +172,31 @@ fun SettingsScreen(
         Spacer(Modifier.height(14.dp))
 
         SectionCard(title = "维护") {
+            HintText(
+                "遇到问题先导出诊断包：里面有环境信息、日志尾部和脱敏后的配置" +
+                    "（API Key、口令会替换成 ***），可以直接发出来。",
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    scope.launch {
+                        viewModel.exportDiagnostics()
+                            .onSuccess { shareDiagnostics(context, it) }
+                            .onFailure {
+                                Toast.makeText(
+                                    context,
+                                    "导出失败：${it.message ?: it.javaClass.simpleName}",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text("导出诊断包")
+            }
+            Spacer(Modifier.height(16.dp))
             HintText("清除环境会删除手机上的 Ubuntu 系统、AstrBot 与 NapCat 数据（含 QQ 登录态与对话记录），下次启动需要重新安装。")
             Spacer(Modifier.height(12.dp))
             Button(

@@ -14,6 +14,16 @@ updates:
       - dependency-name: "androidx.compose*"
       - dependency-name: "com.android.tools.build:gradle"
       - dependency-name: "org.jetbrains.kotlin*"
+      # Gradle 9 要求 AGP 8.9+ 与 Kotlin 2.x，是一次构建链迁移，不是改一行
+      # 版本号能做完的。这类 PR 每周冒出来一次只会变成噪音，需要时单独开 issue。
+      - dependency-name: "gradle"
+        update-types: ["version-update:semver-major"]
+    # 小版本和补丁合成一个 PR。分开提的结果是四个 PR 同时挂在列表里，
+    # 每个都要单独跑一遍 CI、单独判一次兼容性。
+    groups:
+      gradle-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -22,3 +32,7 @@ updates:
     open-pull-requests-limit: 3
     commit-message:
       prefix: "chore(ci)"
+    # 这几个 action 基本同源、同运行时，合起来升一次就够
+    groups:
+      github-actions:
+        patterns: ["*"]

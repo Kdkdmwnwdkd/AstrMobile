@@ -1,6 +1,7 @@
 package com.astrmobile
 
 import android.app.Application
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.astrmobile.core.container.AstrBotApi
@@ -11,6 +12,7 @@ import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.container.CheckItem
 import com.astrmobile.core.container.ConfiguredModel
+import com.astrmobile.core.container.DiagnosticsExporter
 import com.astrmobile.core.container.ConversationSummary
 import com.astrmobile.core.container.Diagnostics
 import com.astrmobile.core.container.DashboardCredentials
@@ -26,6 +28,7 @@ import com.astrmobile.core.container.PluginConfigSnapshot
 import com.astrmobile.core.container.PluginRepository
 import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
+import com.astrmobile.core.container.UsageSnapshot
 import com.astrmobile.core.container.VisionApi
 import com.astrmobile.core.data.AppSettings
 import com.astrmobile.core.data.VisionConfig
@@ -609,6 +612,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _environmentReady.value = false
             controller.refreshInstallState()
         }
+    }
+
+<<<<<<< HEAD
+    /**
+     * 生成诊断包：日志尾部 + 脱敏后的配置 + 环境信息。
+     *
+     * 只读操作，不碰容器；导出失败不影响正在运行的机器人。
+     */
+    suspend fun exportDiagnostics(): Result<File> = withContext(Dispatchers.IO) {
+        val context = getApplication<Application>()
+        val target = File(
+            File(context.cacheDir, "diagnostics"),
+            "AstrMobile-diagnostics-${System.currentTimeMillis()}.zip",
+        )
+        val meta = mapOf(
+            "应用版本" to "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            "Android" to "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            "机型" to "${Build.MANUFACTURER} ${Build.MODEL}",
+            "容器状态" to describeContainer(containerState.value),
+        )
+        DiagnosticsExporter.export(appContainer.paths, target, meta)
+    }
+
+    private fun describeContainer(state: ContainerState): String = when (state) {
+        ContainerState.NotInstalled -> "未安装"
+        ContainerState.Stopped -> "已停止"
+        ContainerState.Starting -> "启动中"
+        ContainerState.Stopping -> "停止中"
+        is ContainerState.Running ->
+            "运行中（AstrBot=${state.astrbotReady}, NapCat=${state.napcatReady}）"
+        is ContainerState.Restarting ->
+            "重启中（${state.attempt}/${state.maxAttempts}，${state.lastReason}）"
+        is ContainerState.Failed -> "失败：${state.reason}"
+=======
+    private val _usage = MutableStateFlow<UsageSnapshot?>(null)
+    val usage: StateFlow<UsageSnapshot?> = _usage.asStateFlow()
+
+    private val _usageError = MutableStateFlow<String?>(null)
+    val usageError: StateFlow<String?> = _usageError.asStateFlow()
+
+    private var usageFetchedAt = 0L
+
+    /**
+     * 刷新用量。
+     *
+     * 60 秒内重复调用直接返回——控制台每次回到前台都会触发一次，
+     * 不设节流等于每切一次页面就发一个请求。
+     */
+    suspend fun refreshUsage(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - usageFetchedAt < 60_000) return
+        if (containerState.value is ContainerState.NotInstalled) return
+
+        val cookie = loginAstrBot().getOrElse {
+            _usageError.value = it.message ?: "登录后台失败，容器在运行吗？"
+            return
+        }
+
+        AstrBotApi().providerTokenStats(cookie, days = 1)
+            .onSuccess {
+                _usage.value = UsageSnapshot.parse(it, days = 1)
+                _usageError.value = null
+                usageFetchedAt = now
+            }
+            .onFailure { _usageError.value = it.message ?: "读取用量失败" }
+>>>>>>> origin/feat/ui-foundation
     }
 
     suspend fun currentSettings(): AppSettings = settings.value

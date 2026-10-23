@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.Button
@@ -40,10 +41,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +68,9 @@ import com.astrmobile.ui.components.SectionCard
 import com.astrmobile.ui.components.StatusDot
 import com.astrmobile.ui.components.StatusHeroCard
 import com.astrmobile.ui.components.copyText
+import com.astrmobile.core.container.UsageSnapshot
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.launch
 import com.astrmobile.core.ui.Radius
 import com.astrmobile.core.ui.Spacing
 
@@ -91,7 +97,15 @@ fun DashboardScreen(
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
+    val usage by viewModel.usage.collectAsStateWithLifecycle()
+    val usageError by viewModel.usageError.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // 只在容器跑起来之后才有数据可查；60 秒节流在 ViewModel 里
+    LaunchedEffect(state) {
+        if (state is ContainerState.Running) viewModel.refreshUsage()
+    }
     val (statusText, tone) = describe(state)
     val statusColor = when (tone) {
         Tone.Ok -> MaterialTheme.colorScheme.primary
@@ -228,6 +242,14 @@ fun DashboardScreen(
                 }
             }
         }
+
+        Spacer(Modifier.height(12.dp))
+
+        UsageCard(
+            usage = usage,
+            error = usageError,
+            onRefresh = { scope.launch { viewModel.refreshUsage(force = true) } },
+        )
 
         Spacer(Modifier.height(12.dp))
 
@@ -460,6 +482,121 @@ private fun GuideStep(index: String, title: String, detail: String) {
 
 /** 状态语义色：具体颜色交给主题，页面不再写死 0x 色值。 */
 private enum class Tone { Ok, Warn, Bad, Idle }
+
+
+/**
+ * 今日用量。
+ *
+ * 数据源是 AstrBot 的 provider-tokens 接口，它只给 token 数；
+ * 金额是 App 侧按牌价表折算的估算值，所以副标题必须写清楚——
+ * 让人以为这是账单，比不显示更难解释。
+ */
+@Composable
+private fun UsageCard(
+    usage: UsageSnapshot?,
+    error: String?,
+    onRefresh: () -> Unit,
+) {
+    SectionCard(
+        title = "今日用量",
+        subtitle = "按模型牌价估算，实际扣费以厂商后台为准",
+        trailing = {
+            IconButton(onClick = onRefresh) {
+                Icon(
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = "刷新用量",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        },
+    ) {
+        when {
+            usage == null && error != null -> Text(
+                text = error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+
+            usage == null -> Text(
+                text = "读取中…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            usage.isFreeOrEmpty -> Text(
+                text = "今天还没有调用记录。让机器人在群里说句话，这里就会有数。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            else -> {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = usage.todayCostText,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "${formatTokens(usage.todayTokens)} tokens · ${usage.todayCalls} 次调用",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+
+                if (usage.todayModels.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    usage.todayModels.take(3).forEach { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = item.model,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = formatTokens(item.tokens),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = item.costYuan?.let(UsageSnapshot::formatYuan) ?: "无牌价",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                if (usage.hasUnpricedModel) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "有模型没匹配到牌价，上面的金额偏低。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 12345 → 1.2 万；小于一万就直接给原数。 */
+private fun formatTokens(tokens: Long): String = when {
+    tokens >= 10_000 -> String.format("%.1f 万", tokens / 10_000.0)
+    else -> tokens.toString()
+}
 
 private fun describe(state: ContainerState): Pair<String, Tone> = when (state) {
     is ContainerState.NotInstalled -> "环境未安装" to Tone.Warn
