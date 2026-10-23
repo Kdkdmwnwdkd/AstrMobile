@@ -262,10 +262,60 @@ else:
         changed = True
     existing.update(desired)
 
+# 回复频率上限。
+#
+# AstrBot 自带的 rate_limit 是**按会话**的固定窗口限流：群聊、私聊各自一份配额，
+# 互不影响。默认 30 条 / 60 秒，意味着同时应付一个群和一个私聊时，
+# 从 QQ 侧看到的是同一个账号每分钟 60 条——短时间爆发式发送，
+# 是最容易被判定成机器人的特征之一。
+#
+# 这里压到每分钟 8 条：够正常对话，又不会因为连着回几个人而显得异常。
+# 只往下压、不往上抬：用户自己在网页后台调得更低就保留原值。
+# strategy 默认 stall（排队等待）：超限的那条晚一点发，不丢。
+# discard 会直接吞消息，对话里表现为「机器人装死」，比慢一点更难解释，
+# 所以只在配置里原本就有 strategy 时沿用用户的选择。
+TARGET_RATE_COUNT = 8
+TARGET_RATE_WINDOW = 60
+
+# 和上面的 changed 分开记，避免「只改了频率」也打出 aiocqhttp 那条日志
+rate_changed = False
+
+platform_settings = cfg.setdefault("platform_settings", {})
+rate_limit = platform_settings.get("rate_limit")
+if not isinstance(rate_limit, dict):
+    rate_limit = {}
+
+try:
+    current_count = int(rate_limit.get("count") or 0)
+    current_window = int(rate_limit.get("time") or 0)
+except (TypeError, ValueError):
+    current_count, current_window = 0, 0
+
+# 未配置视为无穷大（AstrBot 默认是 30/60，同样要压下来）
+too_fast = current_count <= 0 or current_window <= 0 or (
+    current_count / current_window > TARGET_RATE_COUNT / TARGET_RATE_WINDOW
+)
+
+if too_fast:
+    rate_limit["time"] = TARGET_RATE_WINDOW
+    rate_limit["count"] = TARGET_RATE_COUNT
+    rate_limit.setdefault("strategy", "stall")
+    platform_settings["rate_limit"] = rate_limit
+    rate_changed = True
+    print(
+        "[start] 回复频率上限已调至 {}/{} 秒（原 {}/{} 秒）".format(
+            TARGET_RATE_COUNT, TARGET_RATE_WINDOW,
+            current_count or "未设置", current_window or "未设置",
+        )
+    )
+
 if changed:
     with open(path, "w", encoding="utf-8") as fp:
         json.dump(cfg, fp, ensure_ascii=False, indent=2)
     print("[start] 已为 AstrBot 启用 aiocqhttp 通信接口（0.0.0.0:6199）")
+elif rate_changed:
+    with open(path, "w", encoding="utf-8") as fp:
+        json.dump(cfg, fp, ensure_ascii=False, indent=2)
 PY
 fi
 
