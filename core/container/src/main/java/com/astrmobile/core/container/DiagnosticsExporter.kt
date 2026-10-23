@@ -195,9 +195,11 @@ object DiagnosticsExporter {
         for (key in obj.keys().asSequence().toList()) {
             val value = obj.opt(key)
             when {
+                // 键名判断必须在类型判断之前：AstrBot 的 API Key 存成
+                // `"key": ["sk-..."]`，先看类型会走进数组分支，元素就漏掉了。
+                isSecretKey(key) -> obj.put(key, maskValue(value))
                 value is JSONObject -> scrubObject(value)
                 value is JSONArray -> scrubArray(value)
-                isSecretKey(key) -> obj.put(key, maskValue(value))
             }
         }
     }
