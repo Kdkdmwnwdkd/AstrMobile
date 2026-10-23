@@ -614,7 +614,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-<<<<<<< HEAD
     /**
      * 生成诊断包：日志尾部 + 脱敏后的配置 + 环境信息。
      *
@@ -645,8 +644,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         is ContainerState.Restarting ->
             "重启中（${state.attempt}/${state.maxAttempts}，${state.lastReason}）"
         is ContainerState.Failed -> "失败：${state.reason}"
-=======
-    private val _usage = MutableStateFlow<UsageSnapshot?>(null)
+
+private val _usage = MutableStateFlow<UsageSnapshot?>(null)
     val usage: StateFlow<UsageSnapshot?> = _usage.asStateFlow()
 
     private val _usageError = MutableStateFlow<String?>(null)
@@ -677,7 +676,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 usageFetchedAt = now
             }
             .onFailure { _usageError.value = it.message ?: "读取用量失败" }
->>>>>>> origin/feat/ui-foundation
     }
 
     suspend fun currentSettings(): AppSettings = settings.value
