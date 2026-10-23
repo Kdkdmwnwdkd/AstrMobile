@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,6 +44,8 @@ import com.astrmobile.core.container.PersonaItem
 import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.launch
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.InlineLoading
 
 /**
  * 人格设定。
@@ -137,7 +138,7 @@ fun PersonaScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = Spacing.xl, vertical = Spacing.md)
             .verticalScroll(rememberScrollState()),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -158,11 +159,11 @@ fun PersonaScreen(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         if (loading) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                InlineLoading()
                 Spacer(Modifier.size(10.dp))
                 Text("正在读取…", style = MaterialTheme.typography.bodyMedium)
             }
@@ -173,7 +174,7 @@ fun PersonaScreen(
         if (needPassword) {
             SectionCard(title = "需要后台密码") {
                 HintText("改过 AstrBot 后台密码的话，在这里填一次。默认是 astrbot。")
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
@@ -184,7 +185,7 @@ fun PersonaScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 Button(
                     onClick = {
                         loading = true
@@ -198,13 +199,13 @@ fun PersonaScreen(
                     shape = RoundedCornerShape(12.dp),
                 ) { Text("连接") }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(Spacing.lg))
         }
 
         // ---------------------------------------------------------- 选择人格
         if (personas.isNotEmpty()) {
             SectionCard(title = "现有的人格") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     personas.forEach { item ->
                         FilterChip(
                             selected = selected?.id == item.id,
@@ -226,7 +227,7 @@ fun PersonaScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(Spacing.lg))
         }
 
         // ---------------------------------------------------------- 编辑
@@ -235,7 +236,7 @@ fun PersonaScreen(
                 "用一句话说清它是谁、什么性格、怎么说话。写具体比写抽象有用：" +
                     "「你是一个话少但嘴毒的室友，用短句，偶尔冷嘲热讽」比「你很有趣」强得多。",
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
 
             OutlinedTextField(
                 value = draft,
@@ -249,7 +250,7 @@ fun PersonaScreen(
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
 
             Button(
                 onClick = {
@@ -303,18 +304,14 @@ fun PersonaScreen(
                 shape = RoundedCornerShape(14.dp),
             ) {
                 if (busy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
+                    InlineLoading(color = MaterialTheme.colorScheme.onPrimary)
                 } else {
                     Text("保存人格")
                 }
             }
 
             message?.let { text ->
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text(
                     text = text,
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
@@ -343,7 +340,7 @@ fun PersonaScreen(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         SectionCard(title = "怎么让它更像人") {
             HintText(
@@ -355,6 +352,6 @@ fun PersonaScreen(
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
     }
 }

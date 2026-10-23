@@ -24,7 +24,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +55,8 @@ import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.InlineLoading
 
 /**
  * 知识库。
@@ -182,7 +183,7 @@ fun KnowledgeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = Spacing.xl, vertical = Spacing.md)
             .verticalScroll(rememberScrollState()),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -210,7 +211,7 @@ fun KnowledgeScreen(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         message?.let { text ->
             Text(
@@ -223,12 +224,12 @@ fun KnowledgeScreen(
                 },
                 lineHeight = 17.sp,
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
         }
 
         if (loading) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                InlineLoading()
                 Spacer(Modifier.size(10.dp))
                 Text("正在读取…", style = MaterialTheme.typography.bodyMedium)
             }
@@ -243,7 +244,7 @@ fun KnowledgeScreen(
                         "填一个支持 embeddings 的 OpenAI 兼容接口即可，" +
                         "例如 OpenAI 的 text-embedding-3-small，或国内厂商的同类服务。",
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Spacing.md))
 
                 OutlinedTextField(
                     value = embBase,
@@ -254,7 +255,7 @@ fun KnowledgeScreen(
                     shape = RoundedCornerShape(12.dp),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 OutlinedTextField(
                     value = embKey,
                     onValueChange = { embKey = it },
@@ -266,7 +267,7 @@ fun KnowledgeScreen(
                     shape = RoundedCornerShape(12.dp),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 OutlinedTextField(
                     value = embModel,
                     onValueChange = { embModel = it },
@@ -276,7 +277,7 @@ fun KnowledgeScreen(
                     shape = RoundedCornerShape(12.dp),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Spacing.md))
                 Button(
                     onClick = {
                         busy = true
@@ -308,7 +309,7 @@ fun KnowledgeScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(Spacing.lg))
             HintText("重启后再回到这一页，就能建知识库了。")
             return@Column
         }
@@ -327,11 +328,11 @@ fun KnowledgeScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = Spacing.xs),
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(12.dp),
+                                modifier = Modifier.padding(Spacing.md),
                             ) {
                                 Icon(
                                     Icons.Rounded.MenuBook,
@@ -371,7 +372,7 @@ fun KnowledgeScreen(
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 Button(
                     onClick = { showCreate = true; newName = "" },
                     modifier = Modifier.fillMaxWidth(),
@@ -379,7 +380,7 @@ fun KnowledgeScreen(
                 ) { Text("新建知识库") }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(Spacing.lg))
             HintText(
                 "用法：把群规、产品文档、设定集传进去，然后在 AstrBot 后台的" +
                     "「知识库」里把它设为默认（或用 /kb 命令切换），对话时它就会先查再答。",
@@ -395,7 +396,7 @@ fun KnowledgeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = Spacing.sm),
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -432,11 +433,11 @@ fun KnowledgeScreen(
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
 
                 if (busy) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        InlineLoading()
                         Spacer(Modifier.size(10.dp))
                         Text(
                             progress.ifBlank { "处理中…" },
@@ -461,14 +462,14 @@ fun KnowledgeScreen(
                     ) { Text("上传文档") }
                 }
 
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 TextButton(
                     onClick = { selected?.let { scope.launch { openKb(it) } } },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("刷新列表", fontSize = 13.sp) }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(Spacing.lg))
             HintText(
                 "上传后需要几十秒到几分钟做切块和向量化，状态从 processing 变成 completed " +
                     "才算可用。文档越多越慢，建议先传核心的几份。",

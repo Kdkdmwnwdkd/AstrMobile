@@ -49,6 +49,7 @@ import com.astrmobile.core.container.QrCodeDecoder
 import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import com.astrmobile.core.ui.Spacing
 
 /**
  * 原生扫码登录页。
@@ -229,7 +230,7 @@ fun QrCodeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.xl, vertical = Spacing.md),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -247,7 +248,7 @@ fun QrCodeScreen(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         // 二维码区域：白底保证识别率
         Box(
@@ -272,7 +273,7 @@ fun QrCodeScreen(
                 )
                 isError -> Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.ErrorOutline,
@@ -290,7 +291,7 @@ fun QrCodeScreen(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         SectionCard(title = "状态") {
             Text(
@@ -304,7 +305,7 @@ fun QrCodeScreen(
                 textAlign = TextAlign.Start,
             )
             if (isSuccess) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text(
                     text = "回到控制台，AstrBot 的「QQ 扫码登录」会显示已就绪。",
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
@@ -316,7 +317,7 @@ fun QrCodeScreen(
         // 自动读口令失败时的兜底：NapCat 装在非常规路径、或口令被改过时，
         // 用户可以从日志里翻到口令，在这里手动填一次。
         if (showManual && !isSuccess) {
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(Spacing.lg))
             SectionCard(title = "手动输入 NapCat 口令") {
                 Text(
                     text = "去「实时日志」搜 WebUi 或 Token，通常会看到一串口令；" +
@@ -325,7 +326,7 @@ fun QrCodeScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 17.sp,
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 OutlinedTextField(
                     value = manualInput,
                     onValueChange = { manualInput = it },
@@ -335,7 +336,7 @@ fun QrCodeScreen(
                     shape = RoundedCornerShape(12.dp),
                     textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 Button(
                     onClick = {
                         if (manualInput.isNotBlank()) {
@@ -350,9 +351,9 @@ fun QrCodeScreen(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Button(
                 onClick = { reloadKey++ },
                 modifier = Modifier
@@ -364,7 +365,7 @@ fun QrCodeScreen(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         TextButton(onClick = onOpenWebFallback, modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -374,7 +375,7 @@ fun QrCodeScreen(
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         Text(
             text = "扫码只是登录 QQ。通信接口（aiocqhttp，ws://127.0.0.1:6199/ws）已由 App 自动配置好，" +
                 "不用再去后台手动添加；扫码成功后等十几秒会自动连上。",

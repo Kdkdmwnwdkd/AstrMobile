@@ -45,6 +45,7 @@ import com.astrmobile.ui.components.SectionCard
 import com.astrmobile.ui.components.StatusDot
 import com.astrmobile.ui.components.copyLogsToClipboard
 import com.astrmobile.ui.components.shareLogFile
+import com.astrmobile.core.ui.Spacing
 
 @Composable
 fun OnboardingScreen(
@@ -59,7 +60,7 @@ fun OnboardingScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 28.dp),
+            .padding(horizontal = Spacing.xl, vertical = Spacing.section),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             StatusDot(MaterialTheme.colorScheme.primary, size = 12)
@@ -72,13 +73,13 @@ fun OnboardingScreen(
             )
         }
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(Spacing.xl))
         Text(
             text = "AstrMobile",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         Text(
             text = "在你的手机上运行完整的 AstrBot，并把 QQ 变成 AI 节点。全程不需要电脑、不需要命令行。",
             style = MaterialTheme.typography.bodyMedium,
@@ -86,7 +87,7 @@ fun OnboardingScreen(
             lineHeight = 21.sp,
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(Spacing.xxl))
 
         SectionCard(title = "将要完成的三件事") {
             StepRow("01", "搭建 Ubuntu 容器环境", "首次约 10-40 分钟，占用约 1.5GB 空间")
@@ -94,11 +95,11 @@ fun OnboardingScreen(
             StepRow("03", "扫码登录 QQ 并配置模型", "在网页后台完成，App 内一键进入")
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         DeviceCheckCard()
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         when (val current = stage) {
             is Bootstrapper.Stage.Running -> {
@@ -108,13 +109,13 @@ fun OnboardingScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(Spacing.xs))
                     Text(
                         text = current.detail,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(Spacing.md))
                     LinearProgressIndicator(
                         progress = { current.progress.coerceIn(0f, 1f) },
                         modifier = Modifier
@@ -122,7 +123,7 @@ fun OnboardingScreen(
                             .height(6.dp),
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     Text(
                         text = "${(current.progress * 100).toInt()}%",
                         style = MaterialTheme.typography.labelSmall,
@@ -131,15 +132,15 @@ fun OnboardingScreen(
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Spacing.md))
                 LogSection(lines = logs, context = context, height = 220)
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 Text(
                     text = "提示：安装期间请保持屏幕常亮并保持 App 在前台，避免系统中断下载。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 TextButton(
                     onClick = { viewModel.cancelInstall() },
                     modifier = Modifier.fillMaxWidth(),
@@ -158,16 +159,16 @@ fun OnboardingScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error,
                     )
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(Spacing.md))
                     Text(
                         text = "可以重试：已解压的环境不会重复下载，只会继续未完成的步骤。若反复失败，请到「设置」切换镜像源后重试。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(Spacing.md))
                 LogSection(lines = logs, context = context, height = 200)
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(Spacing.lg))
                 Button(
                     onClick = { viewModel.install() },
                     modifier = Modifier
@@ -187,7 +188,7 @@ fun OnboardingScreen(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(Spacing.lg))
                 Button(
                     onClick = onFinished,
                     modifier = Modifier
@@ -217,7 +218,7 @@ fun OnboardingScreen(
                 ) {
                     Text("开始安装", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 Text(
                     text = "仅支持 Android 8.0 及以上的 arm64 设备",
                     style = MaterialTheme.typography.labelSmall,
@@ -227,7 +228,7 @@ fun OnboardingScreen(
             }
         }
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(Spacing.section))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -248,7 +249,7 @@ fun OnboardingScreen(
 
 @Composable
 private fun StepRow(index: String, title: String, detail: String) {
-    Row(modifier = Modifier.padding(vertical = 7.dp)) {
+    Row(modifier = Modifier.padding(vertical = Spacing.sm)) {
         Text(
             text = index,
             style = MaterialTheme.typography.labelSmall,
@@ -256,8 +257,8 @@ private fun StepRow(index: String, title: String, detail: String) {
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.padding(top = 2.dp),
         )
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.padding(start = 12.dp)) {
+        Spacer(Modifier.width(Spacing.md))
+        Column(modifier = Modifier.padding(start = Spacing.md)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
@@ -294,7 +295,7 @@ private fun DeviceCheckCard() {
         KeyValueRow("可用空间", "%.1f GB".format(freeGb))
 
         if (!supported) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             Text(
                 text = "此设备架构不是 arm64-v8a，容器无法运行，请换用 arm64 手机。",
                 style = MaterialTheme.typography.bodyMedium,

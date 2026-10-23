@@ -20,7 +20,6 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,8 +42,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.astrmobile.MainViewModel
 import com.astrmobile.core.container.ConversationSummary
-import com.astrmobile.ui.components.HintText
+import com.astrmobile.ui.components.EmptyState
 import kotlinx.coroutines.launch
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.InlineLoading
 
 private const val PAGE_SIZE = 20
 
@@ -91,7 +92,7 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = Spacing.xl, vertical = Spacing.md)
             .verticalScroll(rememberScrollState()),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -116,7 +117,7 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         message?.let {
             Text(
@@ -125,23 +126,22 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.error,
                 lineHeight = 17.sp,
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
         }
 
         when {
             loading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(10.dp))
+                InlineLoading()
+                Spacer(Modifier.width(Spacing.md))
                 Text("正在读取…", style = MaterialTheme.typography.bodyMedium)
             }
 
-            conversations.isEmpty() -> {
-                HintText(
-                    "还没有对话记录。\n" +
-                        "在群里 @ 机器人说句话，它回复之后这里就会出现。\n" +
-                        "如果一直空着，先去「自检」看看消息通道通没通。",
-                )
-            }
+            conversations.isEmpty() -> EmptyState(
+                icon = Icons.Rounded.ChatBubbleOutline,
+                title = "还没有对话记录",
+                detail = "在群里 @ 机器人说句话，它回复之后这里就会出现。" +
+                    "如果一直空着，先去「自检」看看消息通道通没通。",
+            )
 
             else -> {
                 conversations.forEach { conversation ->
@@ -152,7 +152,7 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                             expanded = if (expanded == conversation.cid) null else conversation.cid
                         },
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                 }
 
                 if (hasMore) {
@@ -184,11 +184,8 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         if (loadingMore) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(14.dp),
-                                strokeWidth = 2.dp,
-                            )
-                            Spacer(Modifier.width(8.dp))
+                            InlineLoading(size = 14.dp)
+                            Spacer(Modifier.width(Spacing.sm))
                             Text("正在加载…")
                         } else {
                             Text("加载更多")
@@ -198,7 +195,7 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
     }
 }
 
@@ -217,7 +214,7 @@ private fun ConversationCard(
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(Spacing.md)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Rounded.ChatBubbleOutline,
@@ -225,7 +222,7 @@ private fun ConversationCard(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp),
                 )
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text(
                     text = conversation.title,
                     style = MaterialTheme.typography.titleSmall,
@@ -254,7 +251,7 @@ private fun ConversationCard(
             }
 
             AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(top = 10.dp)) {
+                Column(modifier = Modifier.padding(top = Spacing.md)) {
                     conversation.history.forEach { msg ->
                         val isUser = msg.role == "user"
                         Row(
@@ -278,7 +275,7 @@ private fun ConversationCard(
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth(0.92f),
                             ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
+                                Column(modifier = Modifier.padding(Spacing.md)) {
                                     Text(
                                         text = roleLabel(msg.role),
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),

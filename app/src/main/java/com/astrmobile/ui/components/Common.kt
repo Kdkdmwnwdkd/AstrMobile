@@ -40,6 +40,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.astrmobile.core.ui.Radius
 import com.astrmobile.core.ui.Spacing
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 
 @Composable
 fun StatusDot(color: Color, pulsing: Boolean = false, size: Int = 10) {
@@ -210,11 +216,11 @@ fun StatusChip(text: String, ready: Boolean?) {
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = Spacing.md, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             StatusDot(color = color, size = 6)
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(Spacing.sm))
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelMedium,
@@ -273,12 +279,100 @@ fun EmptyState(
     }
 }
 
+/**
+ * 行内转圈。
+ *
+ * 之前 17 处 CircularProgressIndicator 各写各的尺寸（12/14/16/18/24）
+ * 和线宽（1.5/2），同一个 App 里转圈的大小和粗细都不一样。统一到这里。
+ */
+@Composable
+fun InlineLoading(
+    modifier: Modifier = Modifier,
+    size: Dp = 16.dp,
+    color: Color = MaterialTheme.colorScheme.primary,
+) {
+    CircularProgressIndicator(
+        modifier = modifier.size(size),
+        strokeWidth = 2.dp,
+        color = color,
+    )
+}
+
+/** 整块加载。首屏还没拿到数据时用它，而不是留一片空白让人以为卡死了。 */
+@Composable
+fun LoadingState(
+    modifier: Modifier = Modifier,
+    text: String = "加载中…",
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.section),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.height(Spacing.md))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * 整块错误。
+ *
+ * 原则是「说清发生了什么 + 给出下一步」。只有一句"失败"等于没提示，
+ * 用户唯一能做的是杀掉 App 重开。
+ */
+@Composable
+fun ErrorState(
+    message: String,
+    modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.section, horizontal = Spacing.lg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(
+            shape = RoundedCornerShape(Radius.lg),
+            color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+        ) {
+            Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Rounded.CloudOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(Spacing.md))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (onRetry != null) {
+            Spacer(Modifier.height(Spacing.lg))
+            OutlinedButton(onClick = onRetry, shape = RoundedCornerShape(Radius.md)) {
+                Text("重试")
+            }
+        }
+    }
+}
+
 @Composable
 fun KeyValueRow(label: String, value: String, valueColor: Color = MaterialTheme.colorScheme.onSurface) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp),
+            .padding(vertical = Spacing.xs),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

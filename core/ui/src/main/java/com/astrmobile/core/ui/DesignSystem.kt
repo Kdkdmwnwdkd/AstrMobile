@@ -32,6 +32,9 @@ object Spacing {
     /** 页面左右留白、大段落之间。 */
     val page = 20.dp
 
+    /** 大区块之间（弹窗内容分区、长表单的段落）。 */
+    val xxl = 24.dp
+
     /** 区块与区块之间。 */
     val section = 28.dp
 }

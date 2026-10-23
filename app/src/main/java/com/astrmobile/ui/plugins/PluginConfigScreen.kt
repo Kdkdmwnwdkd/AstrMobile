@@ -17,7 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,6 +45,8 @@ import com.astrmobile.core.container.PluginConfigItem
 import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.launch
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.InlineLoading
 
 /**
  * 插件参数。
@@ -112,7 +113,7 @@ fun PluginConfigScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = Spacing.xl, vertical = Spacing.md)
             .verticalScroll(rememberScrollState()),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -135,7 +136,7 @@ fun PluginConfigScreen(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         message?.let { text ->
             Text(
@@ -148,13 +149,13 @@ fun PluginConfigScreen(
                 },
                 lineHeight = 17.sp,
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
         }
 
         when {
             loading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(10.dp))
+                InlineLoading()
+                Spacer(Modifier.width(Spacing.md))
                 Text("正在读取配置…", style = MaterialTheme.typography.bodyMedium)
             }
 
@@ -175,7 +176,7 @@ fun PluginConfigScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
 
                 list.forEach { item ->
                     ConfigRow(
@@ -185,7 +186,7 @@ fun PluginConfigScreen(
                     )
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(Spacing.lg))
 
                 Button(
                     onClick = {
@@ -242,11 +243,7 @@ fun PluginConfigScreen(
                     shape = RoundedCornerShape(14.dp),
                 ) {
                     if (busy) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
+                        InlineLoading(color = MaterialTheme.colorScheme.onPrimary)
                     } else {
                         Text("保存")
                     }
@@ -263,12 +260,12 @@ fun PluginConfigScreen(
                     }
                 }
 
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.md))
                 HintText("参数由插件自己定义，含义以插件说明为准。改错了可以点插件详情里的重置，或从备份恢复。")
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
     }
 }
 
@@ -278,7 +275,7 @@ private fun ConfigRow(
     value: Any?,
     onChange: (Any?) -> Unit,
 ) {
-    Column(modifier = Modifier.padding(vertical = 7.dp)) {
+    Column(modifier = Modifier.padding(vertical = Spacing.sm)) {
         when (item.type) {
             "bool" -> Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -300,7 +297,7 @@ private fun ConfigRow(
                         )
                     }
                 }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(Spacing.md))
                 Switch(
                     checked = value as? Boolean ?: false,
                     onCheckedChange = { onChange(it) },
@@ -322,8 +319,8 @@ private fun ConfigRow(
                         lineHeight = 15.sp,
                     )
                 }
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Spacer(Modifier.height(Spacing.sm))
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     item.options.take(6).forEach { option ->
                         FilterChip(
                             selected = value?.toString() == option,

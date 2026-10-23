@@ -23,7 +23,6 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -53,6 +52,9 @@ import com.astrmobile.MainViewModel
 import com.astrmobile.core.container.InstalledPlugin
 import com.astrmobile.core.container.MarketPlugin
 import kotlinx.coroutines.launch
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.EmptyState
+import com.astrmobile.ui.components.InlineLoading
 
 /**
  * 插件市场。
@@ -152,7 +154,7 @@ fun PluginScreen(
         // ---------------------------------------------------------- 顶栏
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+            modifier = Modifier.padding(start = Spacing.sm, end = Spacing.sm, top = Spacing.sm),
         ) {
             if (showBack) {
                 IconButton(onClick = onBack) {
@@ -196,14 +198,14 @@ fun PluginScreen(
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
             shape = RoundedCornerShape(12.dp),
             textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
         )
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            modifier = Modifier.padding(horizontal = Spacing.lg),
         ) {
             FilterChip(
                 selected = tab == 0,
@@ -235,21 +237,29 @@ fun PluginScreen(
             bannerError != null -> Banner(bannerError, isError = true)
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.xs))
 
         // ---------------------------------------------------------- 列表
         Box(modifier = Modifier.weight(1f)) {
             when {
                 tab == 0 && market == null && loadError == null -> Loading()
-                tab == 0 && filtered.isEmpty() -> Empty("没有匹配的插件，换个关键词试试")
-                tab == 1 && installed.isEmpty() -> Empty("还没有装插件。去市场里找找表情包、人格、记忆。")
+                tab == 0 && filtered.isEmpty() -> EmptyState(
+                    icon = Icons.Rounded.Search,
+                    title = "没有匹配的插件",
+                    detail = "换个关键词试试",
+                )
+                tab == 1 && installed.isEmpty() -> EmptyState(
+                    icon = Icons.Rounded.Extension,
+                    title = "还没有装插件",
+                    detail = "去市场里找找表情包、人格、记忆。",
+                )
                 else -> LazyColumn(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        bottom = 16.dp,
+                        start = Spacing.lg,
+                        end = Spacing.lg,
+                        bottom = Spacing.lg,
                     ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     if (tab == 0) {
                         items(filtered, key = { it.id }) { plugin ->
@@ -281,7 +291,7 @@ fun PluginScreen(
                                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                                     color = MaterialTheme.colorScheme.error,
                                     lineHeight = 17.sp,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                                    modifier = Modifier.padding(horizontal = Spacing.xs, vertical = Spacing.sm),
                                 )
                             }
                         }
@@ -319,7 +329,7 @@ fun PluginScreen(
                 "点「配置」空白不代表坏了，很多插件本来就没有配置界面。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
             lineHeight = 16.sp,
         )
     }
@@ -332,14 +342,14 @@ fun PluginScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+                    .padding(start = Spacing.xl, end = Spacing.xl, bottom = Spacing.section),
             ) {
                 Text(
                     text = plugin.displayName,
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text(
                     text = buildString {
                         append("★ ${plugin.stars}")
@@ -350,7 +360,7 @@ fun PluginScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(Spacing.lg))
                 Text(
                     text = plugin.description.ifBlank { "这个插件没有写简介。" },
                     style = MaterialTheme.typography.bodyMedium,
@@ -358,7 +368,7 @@ fun PluginScreen(
                     lineHeight = 22.sp,
                 )
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(Spacing.lg))
                 Text(
                     text = "仓库：${plugin.repo}",
                     style = MaterialTheme.typography.bodySmall,
@@ -367,7 +377,7 @@ fun PluginScreen(
                     lineHeight = 18.sp,
                 )
                 if (plugin.tags.isNotEmpty()) {
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     Text(
                         text = "标签：${plugin.tags.joinToString(" / ")}",
                         style = MaterialTheme.typography.bodySmall,
@@ -375,7 +385,7 @@ fun PluginScreen(
                     )
                 }
 
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(Spacing.xl))
                 if (alreadyInstalled) {
                     OutlinedButton(onClick = { detail = null }, modifier = Modifier.fillMaxWidth()) {
                         Text("已安装，去看「已安装」")
@@ -413,7 +423,7 @@ private fun Banner(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
     ) {
         Text(
             text = text,
@@ -436,8 +446,8 @@ private fun Banner(
 private fun Loading() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-            Spacer(Modifier.height(10.dp))
+            InlineLoading(size = 24.dp)
+            Spacer(Modifier.height(Spacing.md))
             Text(
                 "正在拉取插件列表…",
                 style = MaterialTheme.typography.bodyMedium,
@@ -447,18 +457,6 @@ private fun Loading() {
     }
 }
 
-@Composable
-private fun Empty(text: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 32.dp),
-            lineHeight = 20.sp,
-        )
-    }
-}
 
 @Composable
 private fun MarketRow(
@@ -478,7 +476,7 @@ private fun MarketRow(
             .clickable(onClick = onOpenDetail),
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(Spacing.md),
             verticalAlignment = Alignment.Top,
         ) {
             Icon(
@@ -489,7 +487,7 @@ private fun MarketRow(
                     .size(20.dp)
                     .padding(end = 0.dp),
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(Spacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = plugin.displayName,
@@ -509,7 +507,7 @@ private fun MarketRow(
                         lineHeight = 16.sp,
                     )
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 Text(
                     text = buildString {
                         append("★ ${plugin.stars}")
@@ -522,12 +520,9 @@ private fun MarketRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.sm))
             when {
-                installing -> CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                )
+                installing -> InlineLoading(size = 18.dp)
                 installed -> OutlinedButton(onClick = {}, enabled = false) {
                     Text("已装", fontSize = 12.sp)
                 }
@@ -551,7 +546,7 @@ private fun InstalledRow(
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+        Row(modifier = Modifier.padding(Spacing.md), verticalAlignment = Alignment.Top) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = plugin.displayName,

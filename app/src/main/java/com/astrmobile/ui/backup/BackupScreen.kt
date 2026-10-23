@@ -23,7 +23,6 @@ import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -53,6 +52,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.InlineLoading
 
 /**
  * 备份与恢复。
@@ -103,7 +104,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = Spacing.xl, vertical = Spacing.md)
             .verticalScroll(rememberScrollState()),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -124,14 +125,14 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         if (busy && fraction > 0f) {
             LinearProgressIndicator(
                 progress = { fraction },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(Spacing.sm))
         }
 
         message?.let { text ->
@@ -145,7 +146,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 },
                 lineHeight = 17.sp,
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
         }
 
         // ---------------------------------------------------------- 新建备份
@@ -155,7 +156,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     "没必要让包大几百 MB。\n" +
                     "建议先停止容器再备份，运行中打包可能有文件正在写。",
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
 
             Button(
                 onClick = {
@@ -192,22 +193,18 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 shape = RoundedCornerShape(14.dp),
             ) {
                 if (busy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
-                    Spacer(Modifier.width(8.dp))
+                    InlineLoading(color = MaterialTheme.colorScheme.onPrimary)
+                    Spacer(Modifier.width(Spacing.sm))
                     Text(progress.ifBlank { "正在打包…" }, fontSize = 13.sp)
                 } else {
                     Icon(Icons.Rounded.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(Spacing.sm))
                     Text("立即备份")
                 }
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         // ---------------------------------------------------------- 已有备份
         SectionCard(title = "已有备份（${backups.size}）") {
@@ -219,7 +216,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = Spacing.sm),
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -255,7 +252,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         // ---------------------------------------------------------- 恢复
         SectionCard(title = "从备份恢复") {
@@ -264,7 +261,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     "恢复前系统会自动把现有数据留一份（data.previous），失败会还原。\n" +
                     "恢复后需要重启容器才生效。",
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
 
             OutlinedButton(
                 onClick = { picker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
@@ -275,12 +272,12 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 shape = RoundedCornerShape(14.dp),
             ) {
                 Icon(Icons.Rounded.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text("选择备份包")
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
         Text(
             text = "备份包可以导出到网盘或发给自己。换手机时先装 App、" +
                 "让它自己装好环境，再用这里的「从备份恢复」把数据搬回去。",
@@ -289,7 +286,7 @@ fun BackupScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             lineHeight = 16.sp,
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
     }
 
     // ---------------------------------------------------------- 恢复确认

@@ -29,7 +29,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,6 +45,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.InlineLoading
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -90,7 +91,7 @@ fun WebUiScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
@@ -102,9 +103,9 @@ fun WebUiScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontFamily = FontFamily.Monospace,
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.md))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 PortChip("AstrBot", currentPort == astrbotPort) {
                     currentPort = astrbotPort
                     loading = true
@@ -131,7 +132,7 @@ fun WebUiScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.secondary,
                 fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                modifier = Modifier.padding(horizontal = Spacing.xl, vertical = 2.dp),
             )
         }
 
@@ -140,15 +141,11 @@ fun WebUiScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 4.dp),
+                        .padding(horizontal = Spacing.xl, vertical = Spacing.xs),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(12.dp),
-                        strokeWidth = 1.5.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.width(8.dp))
+                    InlineLoading(size = 12.dp, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(Spacing.sm))
                     Text(
                         text = "正在连接 http://127.0.0.1:$currentPort",
                         style = MaterialTheme.typography.labelSmall,

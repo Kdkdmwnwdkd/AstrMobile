@@ -27,6 +27,7 @@ import com.astrmobile.MainViewModel
 import com.astrmobile.ui.components.LogView
 import com.astrmobile.ui.components.copyLogsToClipboard
 import com.astrmobile.ui.components.shareLogFile
+import com.astrmobile.core.ui.Spacing
 
 @Composable
 fun ConsoleScreen(viewModel: MainViewModel, onBack: () -> Unit) {
@@ -37,7 +38,7 @@ fun ConsoleScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
@@ -70,14 +71,14 @@ fun ConsoleScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = Spacing.md),
             verticalArrangement = Arrangement.Bottom,
         ) {
             LogView(
                 lines = logs,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = Spacing.md),
             )
         }
     }
