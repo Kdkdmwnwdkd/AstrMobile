@@ -50,3 +50,28 @@ fun copyText(context: Context, label: String, text: String) {
     val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
     clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
 }
+
+/**
+ * 分享诊断包（zip）。
+ *
+ * 用 cacheDir 而不是 filesDir：诊断包是一次性的，系统空间紧张时可以自动清掉。
+ * 对应的 FileProvider 路径在 res/xml/file_paths.xml 里单独开了一条。
+ */
+fun shareDiagnostics(context: Context, file: java.io.File) {
+    if (!file.isFile || file.length() == 0L) return
+
+    runCatching {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file,
+        )
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/zip"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "AstrMobile 诊断包")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "导出诊断包"))
+    }
+}
