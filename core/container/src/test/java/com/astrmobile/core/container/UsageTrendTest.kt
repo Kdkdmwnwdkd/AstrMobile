@@ -93,23 +93,24 @@ class UsageTrendTest {
 
     @Test
     fun `区间金额按今日均价折算`() {
-        // 今日 1000 token 花 0.01 元 → 单价 1e-5 元/token
-        // 7 天共 50000 token → 0.5 元
+        // deepseek-chat 的牌价是输入 2 / 输出 8（元每百万），按 3:1 拆：
+        // 100 万 token = 75 万 × 2e-6 + 25 万 × 8e-6 = 1.5 + 2 = 3.5 元
+        // 区间 200 万 token → 7 元
         val snapshot = parse(
             """
             {
-              "today_total_tokens": 1000,
-              "today_total_calls": 2,
+              "today_total_tokens": 1000000,
+              "today_total_calls": 20,
               "today_by_model": [
-                {"provider_model": "deepseek-chat", "tokens": 1000}
+                {"provider_model": "deepseek-chat", "tokens": 1000000}
               ],
-              "range_total_tokens": 50000
+              "range_total_tokens": 2000000
             }
             """,
         )
 
         val cost = snapshot.rangeCostYuan
-        assertEquals(0.5, cost!!, 1e-9)
+        assertEquals(7.0, cost!!, 1e-6)
     }
 
     @Test
