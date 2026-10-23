@@ -727,6 +727,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             result
         }
 
+    /**
+     * 修改任务：先删再建。
+     *
+     * 不用 PATCH：AstrBot 的更新接口对 `note` / `session` 的合并规则依版本而变
+     * （有时要求包在 `payload` 里），删了重建是唯一行为确定的做法。任务 id 会变，
+     * 但用户看不到 id，也没有外部引用它。
+     */
+    suspend fun updateCronJob(
+        original: CronJob,
+        name: String,
+        cronExpression: String,
+        session: String,
+        note: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
+
+        val removed = AstrBotApi().deleteCronJob(cookie, original.id)
+        if (removed.isFailure) return@withContext removed
+
+        val created = AstrBotApi().createCronJob(
+            cookie = cookie,
+            name = name,
+            cronExpression = cronExpression,
+            session = session,
+            note = note,
+            // 编辑不该把停用的任务悄悄打开
+            enabled = original.enabled,
+        )
+        if (created.isSuccess) refreshCronJobs()
+        created
+    }
+
     suspend fun deleteCronJob(job: CronJob): Result<Unit> = withContext(Dispatchers.IO) {
         val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
         val result = AstrBotApi().deleteCronJob(cookie, job.id)
