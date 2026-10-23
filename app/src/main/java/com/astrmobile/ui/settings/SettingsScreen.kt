@@ -53,6 +53,9 @@ import com.astrmobile.core.ui.Spacing
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.SmartToy
+import androidx.compose.runtime.produceState
+import com.astrmobile.core.container.DashboardCredentials
+import com.astrmobile.ui.components.copyText
 
 @Composable
 fun SettingsScreen(
@@ -69,6 +72,16 @@ fun SettingsScreen(
     var pipIndex by remember(settings.pipIndex) { mutableStateOf(settings.pipIndex) }
     var githubProxy by remember(settings.githubProxy) { mutableStateOf(settings.githubProxy) }
     var showResetDialog by remember { mutableStateOf(false) }
+    var showCredentials by remember { mutableStateOf(false) }
+
+    // 登录信息从首页搬过来的：它属于"要进网页后台时才会用到"的东西，
+    // 放在首屏占了一整张卡，却几乎没人天天看。
+    val credentials by produceState<DashboardCredentials?>(null) {
+        value = viewModel.readDashboardCredentials()
+    }
+    val napcatToken by produceState<String?>(null) {
+        value = viewModel.readNapCatToken()
+    }
 
     Column(
         modifier = Modifier
@@ -217,6 +230,70 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(Spacing.lg))
+
+        if (credentials != null || napcatToken != null) {
+            SectionCard(
+                title = "登录信息",
+                subtitle = "进网页版时才需要",
+                trailing = {
+                    TextButton(onClick = { showCredentials = !showCredentials }) {
+                        Text(if (showCredentials) "收起" else "展开")
+                    }
+                },
+            ) {
+                if (!showCredentials) {
+                    Text(
+                        text = "后台账号密码、NapCat 口令，点「展开」查看。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    credentials?.let { creds ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "${creds.username} / ${creds.password}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                            TextButton(
+                                onClick = {
+                                    copyText(
+                                        context,
+                                        "AstrBot 登录信息",
+                                        "${creds.username}\n${creds.password}",
+                                    )
+                                },
+                            ) { Text("复制") }
+                        }
+                    }
+                    napcatToken?.let { token ->
+                        Spacer(Modifier.height(Spacing.sm))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "NapCat: $token",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                            TextButton(onClick = { copyText(context, "NapCat Token", token) }) {
+                                Text("复制")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(Spacing.lg))
+        }
 
         SectionCard(title = "维护") {
             HintText(
