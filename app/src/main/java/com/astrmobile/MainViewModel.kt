@@ -982,6 +982,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _usageDetailBusy.value = false
     }
 
+    // ---------------------------------------------------------------- 会话管理
+
+    suspend fun renameConversation(
+        conversation: ConversationSummary,
+        title: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) {
+            return@withContext Result.failure(IllegalArgumentException("标题不能为空"))
+        }
+        val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
+        AstrBotApi().renameConversation(cookie, conversation.cid, conversation.userId, trimmed)
+    }
+
+    suspend fun deleteConversation(conversation: ConversationSummary): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
+            AstrBotApi().deleteConversation(cookie, conversation.cid, conversation.userId)
+        }
+
     suspend fun currentSettings(): AppSettings = settings.value
 
     override fun onCleared() {
