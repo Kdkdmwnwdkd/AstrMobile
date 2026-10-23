@@ -95,6 +95,7 @@ fun DashboardScreen(
     onOpenConversations: () -> Unit,
     onOpenScreen: () -> Unit,
     onOpenCron: () -> Unit,
+    onOpenChat: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -240,6 +241,27 @@ fun DashboardScreen(
                     )
                     Spacer(Modifier.width(Spacing.sm))
                     Text("打开后台", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                // 试聊放在这里而不是快捷入口里：它是"配完立刻验一下"的动作，
+                // 和「打开后台」是同一类，隔着三行图标去找反而绕。
+                TextButton(
+                    onClick = {
+                        if (running?.astrbotReady == true) {
+                            onOpenChat()
+                        } else {
+                            Toast.makeText(context, "AstrBot 还在启动，等状态变成「已就绪」", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                ) {
+                    Icon(
+                        Icons.Rounded.ChatBubbleOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text("试聊", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

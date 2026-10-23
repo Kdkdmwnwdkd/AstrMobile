@@ -26,6 +26,16 @@ class AstrBotApi(private val port: Int = 6185) {
 
     private val base = "http://127.0.0.1:$port/api/v1"
 
+    /**
+     * 试聊接口不在 /api/v1 下。
+     *
+     * `POST /api/chat/send` 是 dashboard 的老接口，AstrBot 标了
+     * `include_in_schema=False`，但一直在用——WebUI 的聊天就是它。
+     * v1 里的对应实现是 `/chat/threads/{id}/messages`，但要先建 thread、
+     * 还得带 parent_message_id，对"新建一个会话直接说话"来说绕远了。
+     */
+    private val legacyBase = "http://127.0.0.1:$port/api"
+
     /** 登录并返回可直接复用的 Cookie 串。 */
     suspend fun login(username: String, password: String): Result<String> = withContext(Dispatchers.IO) {
         val body = JSONObject()
@@ -740,6 +750,105 @@ class AstrBotApi(private val port: Int = 6185) {
 
             Result.success(data)
         }
+    // ---------------------------------------------------------------- 试聊
+
+    /**
+     * 新建一个 webchat 会话，返回 session_id。
+     *
+     * 平台固定 webchat：它和 QQ 那边的会话完全隔离，试聊不会打扰群里，
+     * 也不会把测试内容写进真实对话记录。
+     */
+    suspend fun newChatSession(cookie: String): Result<String> = withContext(Dispatchers.IO) {
+        val response = requestUrl(
+            "GET",
+            "$legacyBase/chat/new_session?platform_id=webchat",
+            null,
+            cookie,
+        ) ?: return@withContext Result.failure(
+            IllegalStateException("新建会话失败：后台没有响应，容器在运行吗？"),
+        )
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "新建会话失败" }),
+            )
+        }
+
+        val sessionId = (response.data as? JSONObject)?.optString("session_id").orEmpty()
+        if (sessionId.isBlank()) {
+            Result.failure(IllegalStateException("新建会话失败：后台没有返回 session_id"))
+        } else {
+            Result.success(sessionId)
+        }
+    }
+
+    /**
+     * 发一条消息，边收边回调。
+     *
+     * 用 SSE 流式读而不是等整段返回：试聊最长可能要几十秒（推理模型更久），
+     * 等完再显示和卡死没区别。服务端靠 `: heartbeat` 保活，所以读超时设 30 秒
+     * 而不是默认的 15 秒——模型思考时可能十几秒没有任何输出。
+     *
+     * [onUpdate] 会在 IO 线程回调，调用方自己切回主线程。
+     */
+    suspend fun sendChatMessage(
+        cookie: String,
+        sessionId: String,
+        message: String,
+        onUpdate: (ChatStreamState) -> Unit,
+    ): Result<ChatStreamState> = withContext(Dispatchers.IO) {
+        var connection: HttpURLConnection? = null
+        try {
+            val body = JSONObject()
+                .put("message", message)
+                .put("session_id", sessionId)
+                .put("enable_streaming", true)
+                .toString()
+
+            connection = (URL("$legacyBase/chat/send").openConnection() as HttpURLConnection)
+                .apply {
+                    requestMethod = "POST"
+                    connectTimeout = 5_000
+                    readTimeout = 30_000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Accept", "text/event-stream")
+                    setRequestProperty("Cookie", cookie)
+                }
+            connection.outputStream.use { it.write(body.toByteArray()) }
+
+            val code = connection.responseCode
+            if (code !in 200..299) {
+                val detail = connection.errorStream
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    .orEmpty()
+                    .take(200)
+                return@withContext Result.failure(
+                    IllegalStateException(detail.ifBlank { "发送失败（HTTP $code）" }),
+                )
+            }
+
+            var state = ChatStreamState()
+            connection.inputStream.bufferedReader().useLines { lines ->
+                for (line in lines) {
+                    state = ChatStream.consume(state, line)
+                    onUpdate(state)
+                    // 回复已经结束了就别等连接自己关，用户不该为几行元数据多等
+                    if (state.done) break
+                }
+            }
+
+            val failure = state.error
+            if (failure != null) Result.failure(IllegalStateException(failure))
+            else Result.success(state)
+        } catch (error: Throwable) {
+            Result.failure(IllegalStateException(error.message ?: "发送失败", error))
+        } finally {
+            runCatching { connection?.disconnect() }
+        }
+    }
+
     // ---------------------------------------------------------------- 传输
 
     private class ApiResponse(
@@ -768,10 +877,17 @@ class AstrBotApi(private val port: Int = 6185) {
         path: String,
         body: String?,
         cookie: String?,
+    ): ApiResponse? = requestUrl(method, base + path, body, cookie)
+
+    private fun requestUrl(
+        method: String,
+        url: String,
+        body: String?,
+        cookie: String?,
     ): ApiResponse? {
         var connection: HttpURLConnection? = null
         return try {
-            connection = (URL(base + path).openConnection() as HttpURLConnection).apply {
+            connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = method
                 connectTimeout = 5_000
                 readTimeout = 15_000
