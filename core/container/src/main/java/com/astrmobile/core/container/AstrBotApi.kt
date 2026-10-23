@@ -610,6 +610,31 @@ class AstrBotApi(private val port: Int = 6185) {
         return key.take(4) + "****" + key.takeLast(4)
     }
 
+    /**
+     * 用量统计：今日 token / 调用次数 / 按模型分布。
+     *
+     * 注意它只给 token，不给金额——钱是 App 侧按牌价表估的（见 UsagePricing）。
+     * `days` 只接受 1/3/7，服务端会自己纠正其它值。
+     */
+    suspend fun providerTokenStats(cookie: String, days: Int = 1): Result<JSONObject> =
+        withContext(Dispatchers.IO) {
+            val response = request("GET", "/stats/provider-tokens?days=$days", null, cookie)
+                ?: return@withContext Result.failure(
+                    IllegalStateException("读取用量失败：后台没有响应，容器在运行吗？"),
+                )
+
+            if (!response.ok) {
+                return@withContext Result.failure(
+                    IllegalStateException(response.message.ifBlank { "读取用量失败" }),
+                )
+            }
+
+            val data = response.data as? JSONObject
+                ?: return@withContext Result.failure(IllegalStateException("用量返回格式异常"))
+
+            Result.success(data)
+        }
+
     // ---------------------------------------------------------------- 传输
 
     private class ApiResponse(

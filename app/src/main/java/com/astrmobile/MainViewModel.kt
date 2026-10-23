@@ -26,6 +26,7 @@ import com.astrmobile.core.container.PluginConfigSnapshot
 import com.astrmobile.core.container.PluginRepository
 import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
+import com.astrmobile.core.container.UsageSnapshot
 import com.astrmobile.core.container.VisionApi
 import com.astrmobile.core.data.AppSettings
 import com.astrmobile.core.data.VisionConfig
@@ -605,6 +606,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _environmentReady.value = false
             controller.refreshInstallState()
         }
+    }
+
+    private val _usage = MutableStateFlow<UsageSnapshot?>(null)
+    val usage: StateFlow<UsageSnapshot?> = _usage.asStateFlow()
+
+    private val _usageError = MutableStateFlow<String?>(null)
+    val usageError: StateFlow<String?> = _usageError.asStateFlow()
+
+    private var usageFetchedAt = 0L
+
+    /**
+     * 刷新用量。
+     *
+     * 60 秒内重复调用直接返回——控制台每次回到前台都会触发一次，
+     * 不设节流等于每切一次页面就发一个请求。
+     */
+    suspend fun refreshUsage(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - usageFetchedAt < 60_000) return
+        if (containerState.value is ContainerState.NotInstalled) return
+
+        val cookie = loginAstrBot().getOrElse {
+            _usageError.value = it.message ?: "登录后台失败，容器在运行吗？"
+            return
+        }
+
+        AstrBotApi().providerTokenStats(cookie, days = 1)
+            .onSuccess {
+                _usage.value = UsageSnapshot.parse(it, days = 1)
+                _usageError.value = null
+                usageFetchedAt = now
+            }
+            .onFailure { _usageError.value = it.message ?: "读取用量失败" }
     }
 
     suspend fun currentSettings(): AppSettings = settings.value
