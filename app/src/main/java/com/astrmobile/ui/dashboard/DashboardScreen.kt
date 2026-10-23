@@ -60,19 +60,19 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.astrmobile.MainViewModel
 import com.astrmobile.core.container.ContainerState
-import com.astrmobile.core.container.DashboardCredentials
 import com.astrmobile.service.ContainerService
 import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.KeyValueRow
 import com.astrmobile.ui.components.SectionCard
 import com.astrmobile.ui.components.StatusDot
 import com.astrmobile.ui.components.StatusHeroCard
-import com.astrmobile.ui.components.copyText
 import com.astrmobile.core.container.UsageSnapshot
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import com.astrmobile.core.ui.Radius
 import com.astrmobile.core.ui.Spacing
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.Surface
 
 /**
  * 控制台。
@@ -116,52 +116,23 @@ fun DashboardScreen(
         Tone.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    var showCredentials by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
 
+    // 这里原来有一行「CONTROL / 控制台」大标题 + 设置图标。删掉的理由：
+    // 底部 tab 已经标着「控制台」，再写一遍是重复；它占的 80dp 正是首屏
+    // 最缺的。设置图标移到状态卡右上角，那块本来就是空的。
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = Spacing.xl, vertical = Spacing.xl),
+            .padding(horizontal = Spacing.page, vertical = Spacing.md),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text(
-                    text = "CONTROL",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Spacer(Modifier.height(Spacing.xs))
-                Text(
-                    text = "控制台",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-            }
-            IconButton(onClick = onOpenSettings) {
-                Icon(
-                    imageVector = Icons.Rounded.Settings,
-                    contentDescription = "设置",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(Spacing.lg))
-
         // ---------------------------------------------------------- 状态
         val running = state as? ContainerState.Running
         val restartingState = state as? ContainerState.Restarting
         val failedState = state as? ContainerState.Failed
 
         StatusHeroCard(
-            label = "运行状态",
             status = statusText,
             accent = statusColor,
             pulsing = state is ContainerState.Running,
@@ -178,6 +149,15 @@ fun DashboardScreen(
                 "AstrBot :6185" to running?.astrbotReady,
                 "QQ :6099" to running?.napcatReady,
             ),
+            trailing = {
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = "设置",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 if (state is ContainerState.Running || state is ContainerState.Starting) {
@@ -268,7 +248,7 @@ fun DashboardScreen(
 
         Spacer(Modifier.height(Spacing.md))
 
-        UsageCard(
+        UsageStrip(
             usage = usage,
             error = usageError,
             onRefresh = { scope.launch { viewModel.refreshUsage(force = true) } },
@@ -278,140 +258,48 @@ fun DashboardScreen(
 
         // ---------------------------------------------------------- 常用入口
         SectionCard(title = "常用") {
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                QuickTile(
-                    icon = Icons.Rounded.HealthAndSafety,
-                    title = "自检",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenDiagnostics,
-                )
-                QuickTile(
-                    icon = Icons.Rounded.QrCodeScanner,
-                    title = "扫码",
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        if (running?.napcatReady == true) {
-                            onOpenQr()
-                        } else {
-                            Toast.makeText(context, "NapCat 还在启动，请稍等", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                )
-                QuickTile(
-                    icon = Icons.Rounded.Person,
-                    title = "人格",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenPersona,
-                )
-                QuickTile(
-                    icon = Icons.Rounded.MenuBook,
-                    title = "知识",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenKnowledge,
-                )
-                QuickTile(
-                    icon = Icons.Rounded.Schedule,
-                    title = "定时",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenCron,
-                )
-            }
-            Spacer(Modifier.height(Spacing.sm))
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                QuickTile(
-                    icon = Icons.Rounded.ChatBubbleOutline,
-                    title = "对话",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenConversations,
-                )
-                QuickTile(
-                    icon = Icons.Rounded.CloudUpload,
-                    title = "备份",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenBackup,
-                )
-                QuickTile(
-                    icon = Icons.Rounded.PhoneAndroid,
-                    title = "看屏",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenScreen,
-                )
-                QuickTile(
-                    icon = Icons.Rounded.Terminal,
-                    title = "日志",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenConsole,
-                )
+            // 3 列 × 3 行。原来是 5 列两行（5+4）：格子只有 60dp 宽，四个字
+            // 的标题已经开始挤；而且第二行少一个，看着像没排完。9 个入口
+            // 刚好三三得九。
+            val tiles: List<Triple<ImageVector, String, () -> Unit>> = listOf(
+                Triple(Icons.Rounded.HealthAndSafety, "自检", onOpenDiagnostics),
+                Triple(Icons.Rounded.QrCodeScanner, "扫码", {
+                    if (running?.napcatReady == true) {
+                        onOpenQr()
+                    } else {
+                        Toast.makeText(context, "NapCat 还在启动，请稍等", Toast.LENGTH_SHORT).show()
+                    }
+                }),
+                Triple(Icons.Rounded.Person, "人格", onOpenPersona),
+                Triple(Icons.Rounded.MenuBook, "知识", onOpenKnowledge),
+                Triple(Icons.Rounded.Schedule, "定时", onOpenCron),
+                Triple(Icons.Rounded.ChatBubbleOutline, "对话", onOpenConversations),
+                Triple(Icons.Rounded.CloudUpload, "备份", onOpenBackup),
+                Triple(Icons.Rounded.PhoneAndroid, "看屏", onOpenScreen),
+                Triple(Icons.Rounded.Terminal, "日志", onOpenConsole),
+            )
+
+            tiles.chunked(3).forEachIndexed { index, row ->
+                if (index > 0) Spacer(Modifier.height(Spacing.sm))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                ) {
+                    row.forEach { (icon, title, action) ->
+                        QuickTile(
+                            icon = icon,
+                            title = title,
+                            modifier = Modifier.weight(1f),
+                            onClick = action,
+                        )
+                    }
+                    // 末行不满时补空位，避免最后一个格子独占整行宽度
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
             }
         }
 
         Spacer(Modifier.height(Spacing.md))
-
-        // ---------------------------------------------------------- 登录信息（折叠）
-        val credentials by produceState<DashboardCredentials?>(null, state) {
-            value = viewModel.readDashboardCredentials()
-        }
-        val napcatToken by produceState<String?>(null, state) {
-            value = viewModel.readNapCatToken()
-        }
-
-        if (credentials != null || napcatToken != null) {
-            SectionCard(
-                title = "登录信息",
-                trailing = {
-                    TextButton(onClick = { showCredentials = !showCredentials }) {
-                        Text(if (showCredentials) "收起" else "展开")
-                    }
-                },
-            ) {
-                if (!showCredentials) {
-                    Text(
-                        text = "后台账号密码、NapCat 口令，需要进网页版时再用",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                } else {
-                    credentials?.let { creds ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "${creds.username} / ${creds.password}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontFamily = FontFamily.Monospace,
-                            )
-                            TextButton(
-                                onClick = {
-                                    copyText(context, "AstrBot 登录信息", "${creds.username}\n${creds.password}")
-                                },
-                            ) { Text("复制") }
-                        }
-                    }
-                    napcatToken?.let { token ->
-                        Spacer(Modifier.height(Spacing.sm))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "NapCat: $token",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontFamily = FontFamily.Monospace,
-                            )
-                            TextButton(onClick = { copyText(context, "NapCat Token", token) }) {
-                                Text("复制")
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(Spacing.md))
-        }
 
         // ---------------------------------------------------------- 首次引导（折叠）
         SectionCard(
@@ -516,106 +404,134 @@ private enum class Tone { Ok, Warn, Bad, Idle }
 /**
  * 今日用量。
  *
- * 数据源是 AstrBot 的 provider-tokens 接口，它只给 token 数；
- * 金额是 App 侧按牌价表折算的估算值，所以副标题必须写清楚——
- * 让人以为这是账单，比不显示更难解释。
+ * 原来是一整张卡（标题 + 副标题 + 大金额 + 模型明细 + 免责说明），首屏占了
+ * 将近 200dp，把「常用」挤到了屏幕外。而用户真正要看的只有金额——明细是
+ * 排查才用的。所以收成一条：金额 + 元信息一行，点开才展开明细。
+ *
+ * 金额仍是估算：接口只给合计 token，不拆输入/输出，按 3:1 折算。
+ * 这句话放在展开区里，折叠时不占地方，但需要的时候能看到。
  */
 @Composable
-private fun UsageCard(
+private fun UsageStrip(
     usage: UsageSnapshot?,
     error: String?,
     onRefresh: () -> Unit,
 ) {
-    SectionCard(
-        title = "今日用量",
-        subtitle = "按模型牌价估算，实际扣费以厂商后台为准",
-        trailing = {
-            IconButton(onClick = onRefresh) {
-                Icon(
-                    imageVector = Icons.Rounded.Refresh,
-                    contentDescription = "刷新用量",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        },
+    var expanded by remember { mutableStateOf(false) }
+    val hasModels = (usage?.todayModels?.size ?: 0) > 0
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Radius.lg),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+        ),
     ) {
-        when {
-            usage == null && error != null -> Text(
-                text = error,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-
-            usage == null -> Text(
-                text = "读取中…",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            usage.isFreeOrEmpty -> Text(
-                text = "今天还没有调用记录。让机器人在群里说句话，这里就会有数。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            else -> {
-                Row(verticalAlignment = Alignment.Bottom) {
+        Column(
+            modifier = Modifier.padding(
+                start = Spacing.lg,
+                end = Spacing.sm,
+                top = Spacing.sm,
+                bottom = Spacing.sm,
+            ),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(enabled = hasModels) { expanded = !expanded },
+                    verticalAlignment = Alignment.Bottom,
+                ) {
                     Text(
-                        text = usage.todayCostText,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        text = "今日",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 3.dp),
+                    )
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text(
+                        text = when {
+                            usage == null && error != null -> "读取失败"
+                            usage == null -> "¥ …"
+                            usage.isFreeOrEmpty -> "¥ 0.00"
+                            else -> usage.todayCostText
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        color = if (usage == null && error != null) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
                         fontWeight = FontWeight.Bold,
                     )
-                    Spacer(Modifier.width(Spacing.md))
+                    Spacer(Modifier.width(Spacing.sm))
                     Text(
-                        text = "${formatTokens(usage.todayTokens)} tokens · ${usage.todayCalls} 次调用",
+                        text = when {
+                            usage == null && error != null -> error
+                            usage == null -> "读取中"
+                            usage.isFreeOrEmpty -> "还没有调用记录"
+                            else -> "${formatTokens(usage.todayTokens)} tokens · ${usage.todayCalls} 次"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = Spacing.xs),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(bottom = 3.dp),
                     )
                 }
 
-                if (usage.todayModels.isNotEmpty()) {
-                    Spacer(Modifier.height(Spacing.md))
-                    usage.todayModels.take(3).forEach { item ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = Spacing.xs),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = item.model,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                text = formatTokens(item.tokens),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.width(Spacing.md))
-                            Text(
-                                text = item.costYuan?.let(UsageSnapshot::formatYuan) ?: "无牌价",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                IconButton(onClick = onRefresh) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = "刷新用量",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+
+            if (expanded && usage != null && hasModels) {
+                Spacer(Modifier.height(Spacing.sm))
+                usage.todayModels.take(5).forEach { item ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = item.model,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = formatTokens(item.tokens),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(Spacing.md))
+                        Text(
+                            text = item.costYuan?.let(UsageSnapshot::formatYuan) ?: "无牌价",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
-
-                if (usage.hasUnpricedModel) {
-                    Spacer(Modifier.height(Spacing.sm))
-                    Text(
-                        text = "有模型没匹配到牌价，上面的金额偏低。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.secondary,
-                    )
-                }
+                Spacer(Modifier.height(Spacing.xs))
+                Text(
+                    text = if (usage.hasUnpricedModel) {
+                        "按模型牌价估算；有模型没匹配到牌价，金额偏低。实际扣费以厂商后台为准。"
+                    } else {
+                        "按模型牌价估算，实际扣费以厂商后台为准。"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

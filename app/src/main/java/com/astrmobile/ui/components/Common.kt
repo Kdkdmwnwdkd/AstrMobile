@@ -130,18 +130,22 @@ fun SectionCard(
  * 首屏状态卡。
  *
  * 和普通 SectionCard 的区别：它承担"一眼看懂现在什么情况"的职责，
- * 所以用大字号状态 + 从强调色淡出的渐变 + 状态胶囊，
- * 让第一屏有明确主次，而不是一列同等权重的卡片。
+ * 所以用大字号状态 + 从强调色淡出的渐变，让第一屏有明确主次。
+ *
+ * 结构上收敛过一次：原来标题区有一行「运行状态」的小标签、状态字下面
+ * 还有一层说明、再下面是胶囊和操作。一屏四张卡挤在一起时，那行标签
+ * 纯属占地方——「已停止」三个大字已经说清楚了。现在状态点直接贴在字
+ * 左边，右上角留给页面的主图标（设置之类）。
  */
 @Composable
 fun StatusHeroCard(
-    label: String,
     status: String,
     accent: Color,
     modifier: Modifier = Modifier,
-    pulsing: Boolean = false,
     detail: String? = null,
+    pulsing: Boolean = false,
     chips: List<Pair<String, Boolean?>> = emptyList(),
+    trailing: (@Composable () -> Unit)? = null,
     actions: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -161,43 +165,41 @@ fun StatusHeroCard(
                 )
                 .padding(Spacing.xl),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusDot(color = accent, pulsing = pulsing, size = 9)
-                Spacer(Modifier.width(Spacing.sm))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.2.sp,
-                )
-            }
+            Row(verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        StatusDot(color = accent, pulsing = pulsing, size = 8)
+                        Spacer(Modifier.width(Spacing.sm))
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
 
-            Spacer(Modifier.height(Spacing.md))
-
-            Text(
-                text = status,
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-            )
-
-            if (detail != null) {
-                Spacer(Modifier.height(Spacing.xs))
-                Text(
-                    text = detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                    if (detail != null) {
+                        Spacer(Modifier.height(Spacing.xs))
+                        Text(
+                            text = detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            // 和状态文字左对齐：点 8 + 间距 8
+                            modifier = Modifier.padding(start = Spacing.lg),
+                        )
+                    }
+                }
+                trailing?.invoke()
             }
 
             if (chips.isNotEmpty()) {
-                Spacer(Modifier.height(Spacing.lg))
+                Spacer(Modifier.height(Spacing.md))
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     chips.forEach { (text, ready) -> StatusChip(text = text, ready = ready) }
                 }
             }
 
-            Spacer(Modifier.height(Spacing.xl))
+            Spacer(Modifier.height(Spacing.lg))
             actions()
         }
     }
