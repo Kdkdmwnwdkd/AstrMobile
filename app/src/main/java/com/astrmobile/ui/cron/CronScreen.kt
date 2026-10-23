@@ -25,7 +25,6 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +55,7 @@ import com.astrmobile.ui.components.EmptyState
 import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.launch
+import com.astrmobile.ui.components.InlineLoading
 
 /** 常用时间模板：让不想学 Cron 的人也能用起来。 */
 private val TEMPLATES = listOf(
@@ -106,11 +106,7 @@ fun CronScreen(
                 modifier = Modifier.weight(1f),
             )
             if (busy) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                InlineLoading(size = 18.dp)
             } else {
                 IconButton(onClick = { scope.launch { viewModel.refreshCronJobs() } }) {
                     Icon(

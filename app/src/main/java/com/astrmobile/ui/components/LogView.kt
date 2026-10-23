@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.astrmobile.core.ui.classifyLogLine
+import com.astrmobile.core.ui.Spacing
 
 /**
  * 等宽字体的日志视图，自动跟随最新一行。
@@ -46,12 +47,12 @@ fun LogView(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = Spacing.md, vertical = Spacing.md),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         if (lines.isEmpty()) {
             item {
-                Box(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+                Box(Modifier.fillMaxWidth().padding(vertical = Spacing.md)) {
                     Text(
                         text = "暂无日志",
                         style = MaterialTheme.typography.bodyMedium,

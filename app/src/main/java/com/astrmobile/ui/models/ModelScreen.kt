@@ -22,7 +22,6 @@ import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -53,6 +52,8 @@ import com.astrmobile.core.container.ModelPreset
 import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.launch
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.InlineLoading
 
 /**
  * 模型配置页。
@@ -104,7 +105,7 @@ fun ModelScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = Spacing.xl, vertical = Spacing.md)
             .verticalScroll(rememberScrollState()),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -121,14 +122,14 @@ fun ModelScreen(
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         // ---------------------------------------------------------- 模型列表
         val current = models?.firstOrNull { it.enabled } ?: models?.firstOrNull()
         SectionCard(title = "已配置的模型") {
             when {
                 models == null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    InlineLoading()
                     Spacer(Modifier.size(10.dp))
                     Text("正在读取配置…", style = MaterialTheme.typography.bodyMedium)
                 }
@@ -142,7 +143,7 @@ fun ModelScreen(
                     models.orEmpty().forEachIndexed { index, item ->
                         if (index > 0) {
                             HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 8.dp),
+                                modifier = Modifier.padding(vertical = Spacing.sm),
                                 color = MaterialTheme.colorScheme.outlineVariant,
                             )
                         }
@@ -181,7 +182,7 @@ fun ModelScreen(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         // ---------------------------------------------------------- 表单
         SectionCard(title = "添加或替换") {
@@ -189,9 +190,9 @@ fun ModelScreen(
                 "选厂商会自动填好接口地址和模型名，贴 Key 即可。可以存多个，点「设为使用中」切换。" +
                     "Agnes 目前免费（限 20 次/分钟），适合先跑起来，但免费策略随时可能变，别当唯一方案。",
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
 
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 ModelPreset.entries.forEach { item ->
                     FilterChip(
                         selected = preset == item,
@@ -208,7 +209,7 @@ fun ModelScreen(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
 
             OutlinedTextField(
                 value = apiBase,
@@ -221,7 +222,7 @@ fun ModelScreen(
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             )
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
 
             OutlinedTextField(
                 value = apiKey,
@@ -252,7 +253,7 @@ fun ModelScreen(
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             )
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
 
             OutlinedTextField(
                 value = modelName,
@@ -265,7 +266,7 @@ fun ModelScreen(
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
             )
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(Spacing.lg))
 
             Button(
                 onClick = {
@@ -298,18 +299,14 @@ fun ModelScreen(
                 shape = RoundedCornerShape(14.dp),
             ) {
                 if (busy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                    )
+                    InlineLoading(color = MaterialTheme.colorScheme.onPrimary)
                 } else {
                     Text("保存并设为当前")
                 }
             }
 
             message?.let { text ->
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 Text(
                     text = text,
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
@@ -323,7 +320,7 @@ fun ModelScreen(
             }
 
             if (saved && needsRestart) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 TextButton(onClick = onRestart, modifier = Modifier.fillMaxWidth()) {
                     Text("立即重启使配置生效")
                 }
@@ -355,14 +352,14 @@ fun ModelScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (testing) {
-                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                    InlineLoading(size = 14.dp)
                     Spacer(Modifier.size(8.dp))
                 }
                 Text(if (testing) "正在测试连接…" else "测试连接")
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         Text(
             text = "可以保存多个模型，同一时间只有一个处于「使用中」。密钥只写入本机容器，不会上传。",
@@ -442,7 +439,7 @@ private fun ModelRow(
             }
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.xs))
         Text(
             text = buildString {
                 append(model.apiBase.ifBlank { "未填接口地址" })
@@ -467,7 +464,7 @@ private fun ModelRow(
             }
             if (busy) {
                 Spacer(Modifier.size(6.dp))
-                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                InlineLoading(size = 12.dp)
             }
         }
     }

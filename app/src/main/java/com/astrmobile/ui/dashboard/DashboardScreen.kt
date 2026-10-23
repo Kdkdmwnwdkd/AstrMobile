@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -123,7 +122,7 @@ fun DashboardScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+            .padding(horizontal = Spacing.xl, vertical = Spacing.xl),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -137,7 +136,7 @@ fun DashboardScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace,
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 Text(
                     text = "控制台",
                     style = MaterialTheme.typography.headlineMedium,
@@ -153,7 +152,7 @@ fun DashboardScreen(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         // ---------------------------------------------------------- 状态
         val running = state as? ContainerState.Running
@@ -215,7 +214,7 @@ fun DashboardScreen(
                         ),
                     ) {
                         Icon(Icons.Rounded.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(Spacing.sm))
                         Text("启动机器人", fontWeight = FontWeight.SemiBold)
                     }
                 }
@@ -239,13 +238,13 @@ fun DashboardScreen(
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(Spacing.sm))
                     Text("打开后台", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         UsageCard(
             usage = usage,
@@ -253,11 +252,11 @@ fun DashboardScreen(
             onRefresh = { scope.launch { viewModel.refreshUsage(force = true) } },
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         // ---------------------------------------------------------- 常用入口
         SectionCard(title = "常用") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 QuickTile(
                     icon = Icons.Rounded.HealthAndSafety,
                     title = "自检",
@@ -295,8 +294,8 @@ fun DashboardScreen(
                     onClick = onOpenCron,
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(Spacing.sm))
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 QuickTile(
                     icon = Icons.Rounded.ChatBubbleOutline,
                     title = "对话",
@@ -324,7 +323,7 @@ fun DashboardScreen(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         // ---------------------------------------------------------- 登录信息（折叠）
         val credentials by produceState<DashboardCredentials?>(null, state) {
@@ -370,7 +369,7 @@ fun DashboardScreen(
                         }
                     }
                     napcatToken?.let { token ->
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(Spacing.sm))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -389,7 +388,7 @@ fun DashboardScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
         }
 
         // ---------------------------------------------------------- 首次引导（折叠）
@@ -412,20 +411,20 @@ fun DashboardScreen(
                 GuideStep("2", "扫码登录 QQ", "用手机 QQ 扫，扫完在手机上点确认。")
                 GuideStep("3", "配模型", "底部「模型」页填 API Key，保存即生效。")
                 GuideStep("4", "写人格", "底部「插件」旁边没有，进「人格」写一段人设，保存后返回会自动重启。")
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 TextButton(onClick = onRepair) {
                     Text("环境坏了？重新安装", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
         HintText(
             "QQ 机器人使用非官方协议，有被风控或封号的概率，建议用小号。" +
                 "NapCat 常驻会占 1–2GB 内存，低配机型容易被系统回收。",
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
     }
 }
 
@@ -444,7 +443,7 @@ private fun QuickTile(
                 shape = RoundedCornerShape(14.dp),
             )
             .clickable(onClick = onClick)
-            .padding(vertical = 14.dp),
+            .padding(vertical = Spacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
@@ -453,7 +452,7 @@ private fun QuickTile(
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(22.dp),
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(Spacing.sm))
         Text(
             text = title,
             style = MaterialTheme.typography.labelMedium,
@@ -464,7 +463,7 @@ private fun QuickTile(
 
 @Composable
 private fun GuideStep(index: String, title: String, detail: String) {
-    Row(modifier = Modifier.padding(vertical = 5.dp)) {
+    Row(modifier = Modifier.padding(vertical = Spacing.xs)) {
         Text(
             text = index,
             style = MaterialTheme.typography.labelSmall,
@@ -472,7 +471,7 @@ private fun GuideStep(index: String, title: String, detail: String) {
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.padding(top = 2.dp),
         )
-        Column(modifier = Modifier.padding(start = 10.dp)) {
+        Column(modifier = Modifier.padding(start = Spacing.md)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
@@ -546,22 +545,22 @@ private fun UsageCard(
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                     )
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(Spacing.md))
                     Text(
                         text = "${formatTokens(usage.todayTokens)} tokens · ${usage.todayCalls} 次调用",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 4.dp),
+                        modifier = Modifier.padding(bottom = Spacing.xs),
                     )
                 }
 
                 if (usage.todayModels.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(Spacing.md))
                     usage.todayModels.take(3).forEach { item ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = Spacing.xs),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
@@ -577,7 +576,7 @@ private fun UsageCard(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Spacer(Modifier.width(12.dp))
+                            Spacer(Modifier.width(Spacing.md))
                             Text(
                                 text = item.costYuan?.let(UsageSnapshot::formatYuan) ?: "无牌价",
                                 style = MaterialTheme.typography.bodySmall,
@@ -588,7 +587,7 @@ private fun UsageCard(
                 }
 
                 if (usage.hasUnpricedModel) {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(Spacing.sm))
                     Text(
                         text = "有模型没匹配到牌价，上面的金额偏低。",
                         style = MaterialTheme.typography.bodySmall,

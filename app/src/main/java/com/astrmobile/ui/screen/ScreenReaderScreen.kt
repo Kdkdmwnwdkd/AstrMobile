@@ -22,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -59,6 +58,8 @@ import java.io.ByteArrayOutputStream
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.roundToInt
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.InlineLoading
 
 private const val DEFAULT_PROMPT =
     "这是一张安卓手机的屏幕截图。用中文简洁说明：现在是什么界面、在讲什么。" +
@@ -166,7 +167,7 @@ fun ScreenReaderScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .padding(horizontal = Spacing.xl, vertical = Spacing.lg),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -179,7 +180,7 @@ fun ScreenReaderScreen(
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         SectionCard(title = "当前模型") {
             val current = target
@@ -189,7 +190,7 @@ fun ScreenReaderScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(Spacing.sm))
                 HintText(
                     "去「模型」页把 Key 重新保存一次，App 会记住一份（只存在本机、加密存放），" +
                         "之后这里就能直接把截图交给模型看。",
@@ -201,7 +202,7 @@ fun ScreenReaderScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     fontFamily = FontFamily.Monospace,
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(Spacing.xs))
                 Text(
                     text = hostOf(current.apiBase),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.sp),
@@ -211,7 +212,7 @@ fun ScreenReaderScreen(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         SectionCard(title = "问它什么") {
             OutlinedTextField(
@@ -223,13 +224,13 @@ fun ScreenReaderScreen(
                 textStyle = MaterialTheme.typography.bodyMedium,
                 shape = RoundedCornerShape(12.dp),
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(Spacing.sm))
             HintText("默认是「描述这一屏」。想让它只读文字，就直接写「把屏幕上的文字抄下来」。")
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
             Button(
                 onClick = { startCapture(Mode.Vision) },
                 enabled = !busy,
@@ -239,7 +240,7 @@ fun ScreenReaderScreen(
                 shape = RoundedCornerShape(14.dp),
             ) {
                 Icon(Icons.Rounded.Visibility, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(Spacing.sm))
                 Text("看图")
             }
             OutlinedButton(
@@ -254,23 +255,23 @@ fun ScreenReaderScreen(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.sm))
         HintText(
             "「看图」会把截图作为图片发给你配置的服务商（上面那个地址），用于理解画面内容；" +
                 "「只提取文字」完全在手机本地完成，图片不出设备，但只认得字。",
         )
 
         if (busy) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(10.dp))
+                InlineLoading()
+                Spacer(Modifier.width(Spacing.md))
                 Text(busyLabel, style = MaterialTheme.typography.bodyMedium)
             }
         }
 
         error?.let {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             Text(
                 text = it,
                 style = MaterialTheme.typography.bodyMedium,
@@ -280,7 +281,7 @@ fun ScreenReaderScreen(
         }
 
         answer?.let { content ->
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(Spacing.lg))
             SectionCard(
                 title = answerTitle,
                 trailing = {
@@ -296,13 +297,13 @@ fun ScreenReaderScreen(
                     )
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
             HintText(
                 "复制之后可以直接贴到群里问它，「对话模型」页的测试框也行。",
             )
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(Spacing.xl))
     }
 }
 

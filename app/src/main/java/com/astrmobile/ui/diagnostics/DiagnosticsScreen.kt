@@ -23,7 +23,6 @@ import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +44,8 @@ import com.astrmobile.MainViewModel
 import com.astrmobile.core.container.CheckItem
 import com.astrmobile.core.container.CheckLevel
 import com.astrmobile.ui.components.SectionCard
+import com.astrmobile.core.ui.Spacing
+import com.astrmobile.ui.components.InlineLoading
 
 private val OkColor = Color(0xFF167A57)
 private val WarnColor = Color(0xFFB26A00)
@@ -74,7 +75,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = Spacing.xl, vertical = Spacing.md)
             .verticalScroll(rememberScrollState()),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -98,7 +99,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         // ---------------------------------------------------------- 总结
         val failed = items.count { it.level == CheckLevel.FAIL }
@@ -114,15 +115,11 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(Spacing.lg)) {
                 if (loading) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = accent,
-                        )
-                        Spacer(Modifier.width(10.dp))
+                        InlineLoading(size = 18.dp, color = accent)
+                        Spacer(Modifier.width(Spacing.md))
                         Text("正在逐项检查…", style = MaterialTheme.typography.titleSmall)
                     }
                 } else {
@@ -136,7 +133,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         // ---------------------------------------------------------- 逐项
         SectionCard(title = "检查项") {
@@ -153,7 +150,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         Button(
             onClick = { reloadKey++ },
@@ -166,7 +163,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             Text(if (loading) "检查中…" else "重新检查")
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         Text(
             text = "自检只读本地状态，不会修改任何配置。改动之后要重新点一次才会更新结论。",
@@ -175,7 +172,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             lineHeight = 16.sp,
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.lg))
     }
 }
 
@@ -192,7 +189,7 @@ private fun CheckRow(item: CheckItem) {
         CheckLevel.FAIL -> Icons.Rounded.Cancel
     }
 
-    Column(modifier = Modifier.padding(vertical = 7.dp)) {
+    Column(modifier = Modifier.padding(vertical = Spacing.sm)) {
         Row(verticalAlignment = Alignment.Top) {
             Icon(
                 imageVector = icon,
@@ -202,7 +199,7 @@ private fun CheckRow(item: CheckItem) {
                     .size(18.dp)
                     .padding(top = 1.dp),
             )
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(Spacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.title,
@@ -217,7 +214,7 @@ private fun CheckRow(item: CheckItem) {
                     lineHeight = 17.sp,
                 )
                 item.action?.let { action ->
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(Spacing.xs))
                     Text(
                         text = "→ $action",
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),

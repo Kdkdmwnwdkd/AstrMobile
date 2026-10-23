@@ -47,6 +47,7 @@ import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.SectionCard
 import com.astrmobile.ui.components.shareDiagnostics
 import kotlinx.coroutines.launch
+import com.astrmobile.core.ui.Spacing
 
 @Composable
 fun SettingsScreen(
@@ -67,7 +68,7 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.xl, vertical = Spacing.md),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (showBack) {
@@ -82,7 +83,7 @@ fun SettingsScreen(
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.md))
 
         SectionCard(title = "下载源（国内网络建议保持默认）") {
             OutlinedTextField(
@@ -93,7 +94,7 @@ fun SettingsScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
             OutlinedTextField(
                 value = pipIndex,
                 onValueChange = { pipIndex = it },
@@ -102,7 +103,7 @@ fun SettingsScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.md))
             OutlinedTextField(
                 value = githubProxy,
                 onValueChange = { githubProxy = it },
@@ -111,7 +112,7 @@ fun SettingsScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             Button(
                 onClick = {
                     scope.launch {
@@ -129,7 +130,7 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         SectionCard(title = "运行行为") {
             SettingSwitch(
@@ -152,14 +153,14 @@ fun SettingsScreen(
             )
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         SectionCard(title = "后台保活") {
             HintText(
                 "机器人要在息屏后继续工作，需要系统允许本应用后台运行。" +
                     "点下面的按钮，把本应用加入电池优化白名单。",
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             Button(
                 onClick = { requestIgnoreBatteryOptimization(context) },
                 modifier = Modifier.fillMaxWidth(),
@@ -169,14 +170,14 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         SectionCard(title = "维护") {
             HintText(
                 "遇到问题先导出诊断包：里面有环境信息、日志尾部和脱敏后的配置" +
                     "（API Key、口令会替换成 ***），可以直接发出来。",
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             Button(
                 onClick = {
                     scope.launch {
@@ -196,9 +197,9 @@ fun SettingsScreen(
             ) {
                 Text("导出诊断包")
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.lg))
             HintText("清除环境会删除手机上的 Ubuntu 系统、AstrBot 与 NapCat 数据（含 QQ 登录态与对话记录），下次启动需要重新安装。")
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.md))
             Button(
                 onClick = { showResetDialog = true },
                 modifier = Modifier.fillMaxWidth(),
@@ -212,7 +213,7 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         SectionCard(title = "常见问题") {
             FaqItem(
@@ -237,7 +238,7 @@ fun SettingsScreen(
             )
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.lg))
 
         SectionCard(title = "关于") {
             Text(
@@ -245,19 +246,19 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(Spacing.sm))
             HintText(
                 "Android 端的 AstrBot 启动器：proot 容器内运行完整 AstrBot 与 NapCat，" +
                     "原生界面负责安装、启停、保活与网页后台入口。",
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(Spacing.sm))
             HintText(
                 "AstrBot 采用 AGPL-3.0；NapCatQQ 与 QQ 客户端版权归各自作者所有。" +
                     "本项目仅做本地集成，不提供任何账号或协议服务。",
             )
         }
 
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(Spacing.section))
     }
 
     if (showResetDialog) {
@@ -293,7 +294,7 @@ private fun SettingSwitch(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = Spacing.sm),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -309,14 +310,14 @@ private fun SettingSwitch(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(Spacing.md))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
 @Composable
 private fun FaqItem(question: String, answer: String) {
-    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+    Column(modifier = Modifier.padding(vertical = Spacing.sm)) {
         Text(
             text = question,
             style = MaterialTheme.typography.titleMedium,
