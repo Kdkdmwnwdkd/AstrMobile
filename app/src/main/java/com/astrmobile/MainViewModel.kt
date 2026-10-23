@@ -589,6 +589,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsRepository.setKeepAwake(value) }
     }
 
+    fun setOfflineAlert(value: Boolean) {
+        viewModelScope.launch { settingsRepository.setOfflineAlert(value) }
+    }
+
     fun resetEnvironment() {
         viewModelScope.launch {
             runCatching { controller.stop() }
