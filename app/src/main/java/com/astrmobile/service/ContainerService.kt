@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import com.astrmobile.AstrMobileApp
 import com.astrmobile.MainActivity
 import com.astrmobile.R
+import com.astrmobile.core.container.AlertPolicy
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.data.AppSettings
 import com.astrmobile.di.AppContainer
@@ -23,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -39,6 +41,13 @@ class ContainerService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var observeJob: Job? = null
     private lateinit var appContainer: AppContainer
+
+    /** 告警判定与 Android 无关，放在 core 层，规则由单测覆盖。 */
+    private val alertPolicy = AlertPolicy()
+    private val postedAlerts = mutableSetOf<String>()
+
+    @Volatile
+    private var alertsEnabled: Boolean = true
 
     override fun onCreate() {
         super.onCreate()
@@ -85,6 +94,18 @@ class ContainerService : Service() {
             launch {
                 appContainer.settings.settings.collectLatest { settings ->
                     if (settings.keepAwake) acquireWakeLock() else releaseWakeLock()
+                    alertsEnabled = settings.offlineAlert
+                    // 关掉开关时把已经弹出来的告警一并撤掉，不然会留一个撤不掉的红点
+                    if (!alertsEnabled) clearAllAlerts()
+                }
+            }
+
+            // 状态不变时 StateFlow 不会重复发射，但"掉线持续两分钟"这种告警需要靠时间触发，
+            // 所以额外每 30 秒点评一次当前状态。
+            launch {
+                while (true) {
+                    delay(ALERT_TICK_MS)
+                    evaluateAlerts(appContainer.controller.state.value)
                 }
             }
             appContainer.controller.state.collectLatest { state ->
@@ -105,6 +126,8 @@ class ContainerService : Service() {
                 }
                 val manager = getSystemService(NotificationManager::class.java)
                 manager.notify(NOTIFICATION_ID, buildNotification(text))
+                // 状态一变立刻判一次，不用等下一个 tick
+                evaluateAlerts(state)
             }
         }
     }
@@ -119,7 +142,72 @@ class ContainerService : Service() {
             description = "保持 AstrBot 与 QQ 协议端在后台持续运行"
             setShowBadge(false)
         }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        val alertChannel = NotificationChannel(
+            ALERT_CHANNEL_ID,
+            "异常提醒",
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "QQ 掉线、容器异常退出时提醒；正常启停不会打扰"
+        }
+        getSystemService(NotificationManager::class.java).let {
+            it.createNotificationChannel(channel)
+            it.createNotificationChannel(alertChannel)
+        }
+    }
+
+    /** 把判定结果落到通知栏：发新的、撤过期的。 */
+    private fun evaluateAlerts(state: ContainerState) {
+        if (!alertsEnabled) return
+
+        val manager = getSystemService(NotificationManager::class.java)
+        alertPolicy.update(state, System.currentTimeMillis()).forEach { effect ->
+            when (effect) {
+                is AlertPolicy.Effect.Raise -> {
+                    postedAlerts += effect.key
+                    manager.notify(alertId(effect.key), buildAlert(effect))
+                }
+
+                is AlertPolicy.Effect.Clear -> {
+                    postedAlerts -= effect.key
+                    manager.cancel(alertId(effect.key))
+                }
+            }
+        }
+    }
+
+    private fun clearAllAlerts() {
+        val manager = getSystemService(NotificationManager::class.java)
+        postedAlerts.forEach { manager.cancel(alertId(it)) }
+        postedAlerts.clear()
+    }
+
+    /** 固定前缀 + key 的哈希，保证同一个告警每次都落在同一个 id 上（能覆盖、能撤销）。 */
+    private fun alertId(key: String): Int = ALERT_ID_BASE + (key.hashCode() and 0xFF)
+
+    private fun buildAlert(effect: AlertPolicy.Effect.Raise): Notification {
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        return NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setContentTitle(effect.title)
+            .setContentText(effect.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(effect.body))
+            .setSmallIcon(R.drawable.ic_stat_bot)
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setPriority(
+                if (effect.critical) NotificationCompat.PRIORITY_HIGH
+                else NotificationCompat.PRIORITY_DEFAULT,
+            )
+            .setCategory(
+                if (effect.critical) NotificationCompat.CATEGORY_ERROR
+                else NotificationCompat.CATEGORY_STATUS,
+            )
+            .build()
     }
 
     private fun buildNotification(status: String): Notification {
@@ -162,7 +250,10 @@ class ContainerService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "container_status"
+        private const val ALERT_CHANNEL_ID = "container_alerts"
         private const val NOTIFICATION_ID = 1001
+        private const val ALERT_ID_BASE = 2000
+        private const val ALERT_TICK_MS = 30_000L
         const val ACTION_START_CONTAINER = "com.astrmobile.action.START_CONTAINER"
 
         fun start(context: Context, alsoStartContainer: Boolean) {

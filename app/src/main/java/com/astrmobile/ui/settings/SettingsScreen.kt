@@ -141,6 +141,12 @@ fun SettingsScreen(
                 checked = settings.keepAwake,
                 onCheckedChange = { scope.launch { viewModel.setKeepAwake(it) } },
             )
+            SettingSwitch(
+                title = "掉线提醒",
+                detail = "QQ 掉线超过 2 分钟、或容器异常退出时发通知；正常启停不会打扰",
+                checked = settings.offlineAlert,
+                onCheckedChange = { scope.launch { viewModel.setOfflineAlert(it) } },
+            )
         }
 
         Spacer(Modifier.height(14.dp))
