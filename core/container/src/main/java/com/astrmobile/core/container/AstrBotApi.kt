@@ -610,6 +610,108 @@ class AstrBotApi(private val port: Int = 6185) {
         return key.take(4) + "****" + key.takeLast(4)
     }
 
+    // ---------------------------------------------------------------- 定时任务
+
+    /** 任务列表。接口返回可能是数组，也可能包一层 `{jobs: []}`，两种都认。 */
+    suspend fun listCronJobs(cookie: String): Result<List<CronJob>> = withContext(Dispatchers.IO) {
+        val response = request("GET", "/cron/jobs", null, cookie)
+            ?: return@withContext Result.failure(
+                IllegalStateException("读取定时任务失败：后台没有响应，容器在运行吗？"),
+            )
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "读取定时任务失败" }),
+            )
+        }
+
+        val items = when (val data = response.data) {
+            is JSONArray -> data
+            is JSONObject -> data.optJSONArray("jobs") ?: JSONArray()
+            else -> JSONArray()
+        }
+
+        val jobs = buildList {
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index) ?: continue
+                add(parseCronJob(item))
+            }
+        }
+        Result.success(jobs)
+    }
+
+    suspend fun createCronJob(
+        cookie: String,
+        name: String,
+        cronExpression: String,
+        session: String,
+        note: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("name", name)
+            .put("cron_expression", cronExpression)
+            .put("session", session)
+            .put("note", note)
+            .put("enabled", true)
+            .toString()
+
+        write("POST", "/cron/jobs", cookie, body, "创建定时任务")
+    }
+
+    suspend fun setCronEnabled(cookie: String, id: String, enabled: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            write(
+                "PATCH",
+                "/cron/jobs/$id",
+                cookie,
+                JSONObject().put("enabled", enabled).toString(),
+                if (enabled) "启用定时任务" else "停用定时任务",
+            )
+        }
+
+    suspend fun deleteCronJob(cookie: String, id: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            write("DELETE", "/cron/jobs/$id", cookie, null, "删除定时任务")
+        }
+
+    suspend fun runCronNow(cookie: String, id: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            write("POST", "/cron/jobs/$id/run", cookie, null, "执行定时任务")
+        }
+
+    /** 写操作统一出口：失败时把服务端的话原样带出来，比"操作失败"有用得多。 */
+    private fun write(
+        method: String,
+        path: String,
+        cookie: String,
+        body: String?,
+        action: String,
+    ): Result<Unit> {
+        val response = request(method, path, body, cookie)
+            ?: return Result.failure(IllegalStateException("$action 失败：后台没有响应"))
+
+        if (!response.ok) {
+            return Result.failure(
+                IllegalStateException(response.message.ifBlank { "$action 失败" }),
+            )
+        }
+        return Result.success(Unit)
+    }
+
+    private fun parseCronJob(item: JSONObject): CronJob {
+        val payload = item.optJSONObject("payload")
+        return CronJob(
+            id = item.optString("id"),
+            name = item.optString("name").ifBlank { "未命名任务" },
+            cronExpression = item.optString("cron_expression"),
+            note = item.optString("note").ifBlank { payload?.optString("note").orEmpty() },
+            session = item.optString("session").ifBlank { payload?.optString("session").orEmpty() },
+            enabled = item.optBoolean("enabled", true),
+            runOnce = item.optBoolean("run_once", false),
+            nextRunTime = item.optString("next_run_time").takeIf { it.isNotBlank() },
+        )
+    }
+
     // ---------------------------------------------------------------- 传输
 
     private class ApiResponse(
@@ -719,4 +821,16 @@ data class ConversationSummary(
     val messageType: String,
     val updatedAt: Long,
     val history: List<ConversationMessage>,
+)
+
+/** 一条定时任务。字段名与 AstrBot 的 /cron/jobs 返回体一致。 */
+data class CronJob(
+    val id: String,
+    val name: String,
+    val cronExpression: String,
+    val note: String,
+    val session: String,
+    val enabled: Boolean,
+    val runOnce: Boolean,
+    val nextRunTime: String?,
 )
