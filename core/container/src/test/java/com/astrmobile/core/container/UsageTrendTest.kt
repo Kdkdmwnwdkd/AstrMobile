@@ -6,7 +6,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class UsageSnapshotTest {
+/**
+ * 趋势与区间聚合的解析。
+ *
+ * 按模型计价的那些用例在 UsagePricingTest 里的 UsageSnapshotTest，
+ * 这里只管 days/trend/range_by_umo 这几块。
+ */
+class UsageTrendTest {
 
     private fun parse(json: String, days: Int = 7) =
         UsageSnapshot.parse(JSONObject(json.trimIndent()), days)
