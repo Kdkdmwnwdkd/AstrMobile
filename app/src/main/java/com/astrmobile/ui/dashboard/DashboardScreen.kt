@@ -73,6 +73,7 @@ import com.astrmobile.core.ui.Radius
 import com.astrmobile.core.ui.Spacing
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Surface
+import androidx.compose.material.icons.rounded.ChevronRight
 
 /**
  * 控制台。
@@ -96,6 +97,7 @@ fun DashboardScreen(
     onOpenScreen: () -> Unit,
     onOpenCron: () -> Unit,
     onOpenChat: () -> Unit,
+    onOpenUsage: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -252,6 +254,7 @@ fun DashboardScreen(
             usage = usage,
             error = usageError,
             onRefresh = { scope.launch { viewModel.refreshUsage(force = true) } },
+            onOpen = onOpenUsage,
         )
 
         Spacer(Modifier.height(Spacing.md))
@@ -404,22 +407,19 @@ private enum class Tone { Ok, Warn, Bad, Idle }
 /**
  * 今日用量。
  *
- * 原来是一整张卡（标题 + 副标题 + 大金额 + 模型明细 + 免责说明），首屏占了
- * 将近 200dp，把「常用」挤到了屏幕外。而用户真正要看的只有金额——明细是
- * 排查才用的。所以收成一条：金额 + 元信息一行，点开才展开明细。
+ * 首屏只放一行：金额 + token + 次数。模型明细、7 天趋势、按会话分布都在
+ * 详情页——那些是"想知道为什么这么多钱"时才看的东西，不该占首屏。
  *
- * 金额仍是估算：接口只给合计 token，不拆输入/输出，按 3:1 折算。
- * 这句话放在展开区里，折叠时不占地方，但需要的时候能看到。
+ * 金额是估算：接口只给合计 token，不拆输入/输出，按 3:1 折算。
+ * 这句话放在详情页里说清楚，这里只给数字。
  */
 @Composable
 private fun UsageStrip(
     usage: UsageSnapshot?,
     error: String?,
     onRefresh: () -> Unit,
+    onOpen: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val hasModels = (usage?.todayModels?.size ?: 0) > 0
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(Radius.lg),
@@ -429,110 +429,75 @@ private fun UsageStrip(
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
         ),
     ) {
-        Column(
+        Row(
             modifier = Modifier.padding(
                 start = Spacing.lg,
                 end = Spacing.sm,
                 top = Spacing.sm,
                 bottom = Spacing.sm,
             ),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable(enabled = hasModels) { expanded = !expanded },
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Text(
-                        text = "今日",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 3.dp),
-                    )
-                    Spacer(Modifier.width(Spacing.sm))
-                    Text(
-                        text = when {
-                            usage == null && error != null -> "读取失败"
-                            usage == null -> "¥ …"
-                            usage.isFreeOrEmpty -> "¥ 0.00"
-                            else -> usage.todayCostText
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        color = if (usage == null && error != null) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.width(Spacing.sm))
-                    Text(
-                        text = when {
-                            usage == null && error != null -> error
-                            usage == null -> "读取中"
-                            usage.isFreeOrEmpty -> "还没有调用记录"
-                            else -> "${formatTokens(usage.todayTokens)} tokens · ${usage.todayCalls} 次"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(bottom = 3.dp),
-                    )
-                }
-
-                IconButton(onClick = onRefresh) {
-                    Icon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = "刷新用量",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-
-            if (expanded && usage != null && hasModels) {
-                Spacer(Modifier.height(Spacing.sm))
-                usage.todayModels.take(5).forEach { item ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = item.model,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            text = formatTokens(item.tokens),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(Spacing.md))
-                        Text(
-                            text = item.costYuan?.let(UsageSnapshot::formatYuan) ?: "无牌价",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(Spacing.xs))
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onOpen),
+                verticalAlignment = Alignment.Bottom,
+            ) {
                 Text(
-                    text = if (usage.hasUnpricedModel) {
-                        "按模型牌价估算；有模型没匹配到牌价，金额偏低。实际扣费以厂商后台为准。"
+                    text = "今日",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 3.dp),
+                )
+                Spacer(Modifier.width(Spacing.sm))
+                Text(
+                    text = when {
+                        usage == null && error != null -> "读取失败"
+                        usage == null -> "¥ …"
+                        usage.isFreeOrEmpty -> "¥ 0.00"
+                        else -> usage.todayCostText
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                    color = if (usage == null && error != null) {
+                        MaterialTheme.colorScheme.error
                     } else {
-                        "按模型牌价估算，实际扣费以厂商后台为准。"
+                        MaterialTheme.colorScheme.primary
+                    },
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.width(Spacing.sm))
+                Text(
+                    text = when {
+                        usage == null && error != null -> error
+                        usage == null -> "读取中"
+                        usage.isFreeOrEmpty -> "还没有调用记录"
+                        else -> "${formatTokens(usage.todayTokens)} tokens · ${usage.todayCalls} 次"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(bottom = 3.dp),
                 )
             }
+
+            IconButton(onClick = onRefresh) {
+                Icon(
+                    imageVector = Icons.Rounded.Refresh,
+                    contentDescription = "刷新用量",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = "查看用量详情",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .size(18.dp)
+                    .padding(end = Spacing.xs),
+            )
         }
     }
 }
