@@ -849,6 +849,58 @@ class AstrBotApi(private val port: Int = 6185) {
         }
     }
 
+    // ---------------------------------------------------------------- 行为配置
+
+    /**
+     * 读取完整的系统配置。
+     *
+     * 注意这是**整份**配置（几百个字段），因为写回去的接口是整份替换，
+     * 拿不到完整内容就没法安全地改其中一个键。
+     */
+    suspend fun readSystemConfig(cookie: String): Result<JSONObject> = withContext(Dispatchers.IO) {
+        val response = request("GET", "/system-config", null, cookie)
+            ?: return@withContext Result.failure(
+                IllegalStateException("读取配置失败：后台没有响应，容器在运行吗？"),
+            )
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "读取配置失败" }),
+            )
+        }
+
+        val data = response.data as? JSONObject
+            ?: return@withContext Result.failure(IllegalStateException("配置返回格式异常"))
+
+        Result.success(data)
+    }
+
+    /**
+     * 整份写回系统配置。
+     *
+     * `PUT /system-config` 是完整替换，不是局部更新——调用方必须拿
+     * [readSystemConfig] 的结果改完再传进来，不能只传改动的字段。
+     * 服务端会做校验并热重载管道，不需要重启容器。
+     *
+     * 返回服务端的话术（"保存成功~"，或者带连通性警告的提示），
+     * 直接展示比我们自己编一句更准确。
+     */
+    suspend fun writeSystemConfig(cookie: String, config: JSONObject): Result<String> =
+        withContext(Dispatchers.IO) {
+            val response = request("PUT", "/system-config", config.toString(), cookie)
+                ?: return@withContext Result.failure(
+                    IllegalStateException("保存失败：后台没有响应"),
+                )
+
+            if (!response.ok) {
+                return@withContext Result.failure(
+                    IllegalStateException(response.message.ifBlank { "保存失败" }),
+                )
+            }
+
+            Result.success(response.message.ifBlank { "已保存" })
+        }
+
     // ---------------------------------------------------------------- 传输
 
     private class ApiResponse(

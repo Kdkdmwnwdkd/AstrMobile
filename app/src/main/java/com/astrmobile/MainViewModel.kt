@@ -5,6 +5,8 @@ import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.astrmobile.core.container.AstrBotApi
+import com.astrmobile.core.container.BehaviorConfig
+import com.astrmobile.core.container.BehaviorSettings
 import com.astrmobile.core.container.BackupRepository
 import com.astrmobile.core.container.BackupResult
 import com.astrmobile.core.container.AstrBotConfigReader
@@ -877,6 +879,69 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (index < 0) return
         _chatMessages.value = current.toMutableList().also { it[index] = transform(it[index]) }
     }
+
+    // ---------------------------------------------------------------- 行为配置
+
+    private val _behavior = MutableStateFlow<BehaviorSettings?>(null)
+    val behavior: StateFlow<BehaviorSettings?> = _behavior.asStateFlow()
+
+    private val _behaviorError = MutableStateFlow<String?>(null)
+    val behaviorError: StateFlow<String?> = _behaviorError.asStateFlow()
+
+    private val _behaviorBusy = MutableStateFlow(false)
+    val behaviorBusy: StateFlow<Boolean> = _behaviorBusy.asStateFlow()
+
+    suspend fun loadBehavior() {
+        _behaviorBusy.value = true
+        val cookie = loginAstrBot().getOrElse {
+            _behaviorError.value = it.message ?: "登录后台失败，容器在运行吗？"
+            _behaviorBusy.value = false
+            return
+        }
+
+        AstrBotApi().readSystemConfig(cookie)
+            .onSuccess {
+                _behavior.value = BehaviorConfig.read(it)
+                _behaviorError.value = null
+            }
+            .onFailure { _behaviorError.value = it.message ?: "读取配置失败" }
+        _behaviorBusy.value = false
+    }
+
+    /**
+     * 保存行为配置。
+     *
+     * 保存前重新读一次完整配置，而不是复用刚进页面时缓存的副本：
+     * `PUT /system-config` 是整份替换，如果这期间用户在网页后台改过别的
+     * 设置（比如换了模型、加了插件），用旧副本写回会把那些改动冲掉。
+     * 多一次 GET 换这个保证，值。
+     */
+    suspend fun saveBehavior(settings: BehaviorSettings): Result<String> =
+        withContext(Dispatchers.IO) {
+            val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
+
+            _behaviorBusy.value = true
+            try {
+                val config = AstrBotApi().readSystemConfig(cookie)
+                    .getOrElse {
+                        _behaviorError.value = it.message ?: "读取配置失败"
+                        return@withContext Result.failure(it)
+                    }
+
+                if (!BehaviorConfig.apply(config, settings)) {
+                    return@withContext Result.success("没有改动")
+                }
+
+                AstrBotApi().writeSystemConfig(cookie, config)
+                    .onSuccess {
+                        _behavior.value = settings
+                        _behaviorError.value = null
+                    }
+                    .onFailure { _behaviorError.value = it.message ?: "保存失败" }
+            } finally {
+                _behaviorBusy.value = false
+            }
+        }
 
     suspend fun currentSettings(): AppSettings = settings.value
 

@@ -45,15 +45,20 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.astrmobile.MainViewModel
 import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.SectionCard
+import com.astrmobile.ui.components.SettingSwitch
 import com.astrmobile.ui.components.shareDiagnostics
 import kotlinx.coroutines.launch
 import com.astrmobile.core.ui.Spacing
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.SmartToy
 
 @Composable
 fun SettingsScreen(
     viewModel: MainViewModel,
     showBack: Boolean = true,
     onBack: () -> Unit,
+    onOpenBehavior: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -127,6 +132,46 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text("保存下载源")
+            }
+        }
+
+        Spacer(Modifier.height(Spacing.lg))
+
+        // 机器人自己的行为（唤醒、回复方式、白名单）单独一页。
+        // 这几项和"App 怎么运行"是两回事，混在一起会让人找不到。
+        SectionCard(title = "机器人行为", subtitle = "唤醒前缀、回复方式、白名单") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenBehavior)
+                    .padding(vertical = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.SmartToy,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(Spacing.md))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "打开设置",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "群里怎么唤醒它、回不回 @、谁能用",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
 
@@ -285,36 +330,6 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingSwitch(
-    title: String,
-    detail: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = Spacing.sm),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.width(Spacing.md))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
 @Composable
 private fun FaqItem(question: String, answer: String) {
     Column(modifier = Modifier.padding(vertical = Spacing.sm)) {
