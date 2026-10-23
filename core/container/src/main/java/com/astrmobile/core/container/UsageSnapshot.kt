@@ -10,6 +10,19 @@ data class ModelUsage(
     val costYuan: Double?,
 )
 
+/** 趋势图上的一个点：某一天的 token 总数。 */
+data class UsagePoint(
+    val timestampSec: Long,
+    val tokens: Long,
+)
+
+/** 某个会话在这段时间里的用量。 */
+data class UmoUsage(
+    val umo: String,
+    val displayName: String,
+    val tokens: Long,
+)
+
 /**
  * 一次用量快照。
  *
@@ -25,12 +38,31 @@ data class UsageSnapshot(
     val todayModels: List<ModelUsage>,
     val rangeTokens: Long,
     val rangeCalls: Int,
+    /** 按天的 token 序列，来自 `trend.total_series`。 */
+    val trend: List<UsagePoint> = emptyList(),
+    /** 区间内按会话的分布，用来回答"哪个群最费钱"。 */
+    val rangeByUmo: List<UmoUsage> = emptyList(),
     /** 有模型没匹配到牌价，金额只覆盖了部分用量。 */
     val hasUnpricedModel: Boolean,
 ) {
     val todayCostText: String get() = formatYuan(todayCostYuan)
 
     val isFreeOrEmpty: Boolean get() = todayTokens == 0L
+
+    /**
+     * 区间（7 天 / 30 天）的估算花费。
+     *
+     * 接口只给今日的按模型分布，没有区间内的分布，所以拿今日的平均单价
+     * （元/token）去折算整段。这个近似在模型没换过的时候很准，换了模型
+     * 就会偏——所以界面上必须写明"按今日均价折算"，不能只给一个数字。
+     *
+     * 今日还没用量时返回 null：没有单价可用，编一个 0 反而误导。
+     */
+    val rangeCostYuan: Double?
+        get() {
+            if (todayTokens <= 0L || rangeTokens <= 0L) return null
+            return rangeTokens * (todayCostYuan / todayTokens)
+        }
 
     companion object {
         fun formatYuan(value: Double): String = when {
@@ -61,6 +93,38 @@ data class UsageSnapshot(
                 }
             }
 
+            val trend = buildList {
+                val series = data.optJSONObject("trend")?.optJSONArray("total_series")
+                if (series != null) {
+                    for (index in 0 until series.length()) {
+                        val pair = series.optJSONArray(index) ?: continue
+                        // 只有时间戳没有数值的残项直接跳过
+                        if (pair.length() < 2) continue
+                        val ts = pair.optLong(0, 0L)
+                        if (ts <= 0L) continue
+                        add(UsagePoint(timestampSec = ts, tokens = pair.optLong(1, 0L)))
+                    }
+                }
+            }
+
+            val rangeByUmo = buildList {
+                val array = data.optJSONArray("range_by_umo")
+                if (array != null) {
+                    for (index in 0 until array.length()) {
+                        val item = array.optJSONObject(index) ?: continue
+                        val umo = item.optString("umo")
+                        if (umo.isBlank()) continue
+                        add(
+                            UmoUsage(
+                                umo = umo,
+                                displayName = item.optString("display_name").ifBlank { umo },
+                                tokens = item.optLong("tokens", 0L),
+                            ),
+                        )
+                    }
+                }
+            }
+
             return UsageSnapshot(
                 days = days,
                 todayTokens = todayTokens,
@@ -69,6 +133,8 @@ data class UsageSnapshot(
                 todayModels = models.sortedByDescending { it.tokens },
                 rangeTokens = data.optLong("range_total_tokens", 0L),
                 rangeCalls = data.optInt("range_total_calls", 0),
+                trend = trend,
+                rangeByUmo = rangeByUmo.sortedByDescending { it.tokens },
                 hasUnpricedModel = unpriced,
             )
         }

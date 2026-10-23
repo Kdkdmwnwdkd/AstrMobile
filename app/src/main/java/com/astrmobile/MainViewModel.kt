@@ -943,6 +943,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
+    // ---------------------------------------------------------------- 用量详情
+
+    private val _usageDetail = MutableStateFlow<UsageSnapshot?>(null)
+    val usageDetail: StateFlow<UsageSnapshot?> = _usageDetail.asStateFlow()
+
+    private val _usageDetailBusy = MutableStateFlow(false)
+    val usageDetailBusy: StateFlow<Boolean> = _usageDetailBusy.asStateFlow()
+
+    private val _usageDetailError = MutableStateFlow<String?>(null)
+    val usageDetailError: StateFlow<String?> = _usageDetailError.asStateFlow()
+
+    private var usageDetailDays = 0
+
+    /**
+     * 拉一段时间（7 / 30 天）的用量。
+     *
+     * 和首屏那个"今日"分开存：两边的 days 不同，共用一个 StateFlow 会导致
+     * 从详情页返回时首屏数字突然变成 7 天合计。
+     */
+    suspend fun refreshUsageDetail(days: Int, force: Boolean = false) {
+        if (!force && days == usageDetailDays && _usageDetail.value != null) return
+        usageDetailDays = days
+
+        _usageDetailBusy.value = true
+        val cookie = loginAstrBot().getOrElse {
+            _usageDetailError.value = it.message ?: "登录后台失败，容器在运行吗？"
+            _usageDetailBusy.value = false
+            return
+        }
+
+        AstrBotApi().providerTokenStats(cookie, days = days)
+            .onSuccess {
+                _usageDetail.value = UsageSnapshot.parse(it, days = days)
+                _usageDetailError.value = null
+            }
+            .onFailure { _usageDetailError.value = it.message ?: "读取用量失败" }
+        _usageDetailBusy.value = false
+    }
+
     suspend fun currentSettings(): AppSettings = settings.value
 
     override fun onCleared() {

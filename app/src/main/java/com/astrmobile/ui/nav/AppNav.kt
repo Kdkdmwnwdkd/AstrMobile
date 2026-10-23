@@ -42,6 +42,7 @@ import com.astrmobile.ui.onboarding.OnboardingScreen
 import com.astrmobile.ui.qrcode.QrCodeScreen
 import com.astrmobile.ui.screen.ScreenReaderScreen
 import com.astrmobile.ui.settings.SettingsScreen
+import com.astrmobile.ui.usage.UsageScreen
 import com.astrmobile.ui.webui.WebUiScreen
 
 object Routes {
@@ -61,6 +62,7 @@ object Routes {
     const val Cron = "cron"
     const val Chat = "chat"
     const val Behavior = "behavior"
+    const val Usage = "usage"
     const val PluginConfig = "pluginconfig/{pluginId}"
 
     // 目录名理论上不含特殊字符，但导航参数必须编码，
@@ -173,6 +175,7 @@ fun AppNav(viewModel: MainViewModel) {
                     onOpenScreen = { navController.navigate(Routes.ScreenReader) },
                     onOpenCron = { navController.navigate(Routes.Cron) },
                     onOpenChat = { navController.navigate(Routes.Chat) },
+                    onOpenUsage = { navController.navigate(Routes.Usage) },
                     onRepair = {
                         viewModel.prepareReinstall()
                         navController.navigate(Routes.Onboarding)
@@ -269,6 +272,13 @@ fun AppNav(viewModel: MainViewModel) {
 
             composable(Routes.ScreenReader) {
                 ScreenReaderScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.Usage) {
+                UsageScreen(
                     viewModel = viewModel,
                     onBack = { navController.popBackStack() },
                 )
