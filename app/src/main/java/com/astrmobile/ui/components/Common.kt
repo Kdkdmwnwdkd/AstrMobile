@@ -24,6 +24,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -364,6 +365,44 @@ fun ErrorState(
                 Text("重试")
             }
         }
+    }
+}
+
+/**
+ * 开关项：左边标题 + 说明，右边开关。
+ *
+ * 原来只存在于设置页里（private），这次行为配置页也要用，提到公共组件。
+ * 顺手把说明文字的字号从 13sp 收到 bodySmall——13sp 是之前每页自己定的
+ * 那一批，没有走 typography。
+ */
+@Composable
+fun SettingSwitch(
+    title: String,
+    detail: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.sm),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(Spacing.md))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
