@@ -63,7 +63,10 @@ import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.KeyValueRow
 import com.astrmobile.ui.components.SectionCard
 import com.astrmobile.ui.components.StatusDot
+import com.astrmobile.ui.components.StatusHeroCard
 import com.astrmobile.ui.components.copyText
+import com.astrmobile.core.ui.Radius
+import com.astrmobile.core.ui.Spacing
 
 /**
  * 控制台。
@@ -89,7 +92,13 @@ fun DashboardScreen(
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val (statusText, statusColor) = describe(state)
+    val (statusText, tone) = describe(state)
+    val statusColor = when (tone) {
+        Tone.Ok -> MaterialTheme.colorScheme.primary
+        Tone.Warn -> MaterialTheme.colorScheme.secondary
+        Tone.Bad -> MaterialTheme.colorScheme.error
+        Tone.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     var showCredentials by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
@@ -132,61 +141,29 @@ fun DashboardScreen(
 
         // ---------------------------------------------------------- 状态
         val running = state as? ContainerState.Running
-        SectionCard(title = "运行状态") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (state is ContainerState.Starting || state is ContainerState.Stopping) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                } else {
-                    StatusDot(
-                        color = statusColor,
-                        pulsing = state is ContainerState.Running,
-                        size = 12,
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
+        val restartingState = state as? ContainerState.Restarting
+        val failedState = state as? ContainerState.Failed
 
-            Spacer(Modifier.height(10.dp))
-
-            KeyValueRow(
-                label = "AstrBot",
-                value = when {
-                    running == null -> "6185"
-                    running.astrbotReady -> "已就绪 :6185"
-                    else -> "启动中…"
-                },
-                valueColor = if (running?.astrbotReady == true) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-            KeyValueRow(
-                label = "QQ 协议端",
-                value = when {
-                    running == null -> "6099"
-                    running.napcatReady -> "已就绪 :6099"
-                    else -> "启动中…"
-                },
-                valueColor = if (running?.napcatReady == true) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-
-            Spacer(Modifier.height(14.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        StatusHeroCard(
+            label = "运行状态",
+            status = statusText,
+            accent = statusColor,
+            pulsing = state is ContainerState.Running,
+            detail = when {
+                restartingState != null ->
+                    "第 ${restartingState.attempt}/${restartingState.maxAttempts} 次重试，" +
+                        "${restartingState.delaySeconds} 秒后开始"
+                failedState != null -> failedState.reason
+                running != null && !running.fullyReady -> "正在等待子服务就绪，通常十几秒"
+                running != null -> "AstrBot 与 QQ 协议端都在后台运行"
+                else -> null
+            },
+            chips = listOf(
+                "AstrBot :6185" to running?.astrbotReady,
+                "QQ :6099" to running?.napcatReady,
+            ),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 if (state is ContainerState.Running || state is ContainerState.Starting) {
                     OutlinedButton(
                         onClick = {
@@ -195,8 +172,8 @@ fun DashboardScreen(
                         },
                         modifier = Modifier
                             .weight(1f)
-                            .height(46.dp),
-                        shape = RoundedCornerShape(12.dp),
+                            .height(48.dp),
+                        shape = RoundedCornerShape(Radius.md),
                     ) {
                         Text("停止")
                     }
@@ -204,8 +181,8 @@ fun DashboardScreen(
                         onClick = { viewModel.restartContainer() },
                         modifier = Modifier
                             .weight(0.75f)
-                            .height(46.dp),
-                        shape = RoundedCornerShape(12.dp),
+                            .height(48.dp),
+                        shape = RoundedCornerShape(Radius.md),
                     ) {
                         Text("重启")
                     }
@@ -214,8 +191,8 @@ fun DashboardScreen(
                         onClick = { startWithService(context) },
                         modifier = Modifier
                             .weight(1f)
-                            .height(46.dp),
-                        shape = RoundedCornerShape(12.dp),
+                            .height(48.dp),
+                        shape = RoundedCornerShape(Radius.md),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -228,9 +205,9 @@ fun DashboardScreen(
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(Spacing.xs))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                 TextButton(
                     onClick = {
                         if (running?.astrbotReady == true) {
@@ -481,19 +458,21 @@ private fun GuideStep(index: String, title: String, detail: String) {
     }
 }
 
-private fun describe(state: ContainerState): Pair<String, Color> = when (state) {
-    is ContainerState.NotInstalled -> "环境未安装" to Color(0xFFFFC46B)
-    is ContainerState.Stopped -> "已停止" to Color(0xFFBAC7C2)
-    is ContainerState.Starting -> "正在启动…" to Color(0xFF4FE3A4)
-    is ContainerState.Stopping -> "正在停止…" to Color(0xFFFFC46B)
-    is ContainerState.Failed -> "运行异常" to Color(0xFFFF7B72)
+/** 状态语义色：具体颜色交给主题，页面不再写死 0x 色值。 */
+private enum class Tone { Ok, Warn, Bad, Idle }
+
+private fun describe(state: ContainerState): Pair<String, Tone> = when (state) {
+    is ContainerState.NotInstalled -> "环境未安装" to Tone.Warn
+    is ContainerState.Stopped -> "已停止" to Tone.Idle
+    is ContainerState.Starting -> "正在启动…" to Tone.Ok
+    is ContainerState.Stopping -> "正在停止…" to Tone.Warn
+    is ContainerState.Failed -> "运行异常" to Tone.Bad
     is ContainerState.Running -> when {
-        state.fullyReady -> "运行中" to Color(0xFF4FE3A4)
-        else -> "容器已起，服务启动中" to Color(0xFFFFC46B)
+        state.fullyReady -> "运行中" to Tone.Ok
+        else -> "容器已起，服务启动中" to Tone.Warn
     }
     is ContainerState.Restarting ->
-        "异常退出，${state.delaySeconds}s 后自动重启（${state.attempt}/${state.maxAttempts}）" to
-            Color(0xFFFFC46B)
+        "异常退出，${state.delaySeconds}s 后自动重启（${state.attempt}/${state.maxAttempts}）" to Tone.Warn
 }
 
 private fun startWithService(context: Context) {
