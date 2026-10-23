@@ -28,6 +28,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # 容器脚本跑在手机里，语法错误的表现是「装到一半失败 / 起不来」，
+      # 真机上极难定位。这一步不依赖 Android SDK，几十毫秒就能跑完，放在最前面。
+      - name: Check container scripts
+        run: python3 tools/check_scripts.py
+
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
@@ -67,6 +72,18 @@ jobs:
 
       - name: Unit tests
         run: ./gradlew test --no-daemon --stacktrace
+
+      - name: Lint
+        run: ./gradlew :app:lintDebug --no-daemon --stacktrace
+
+      - name: Upload lint report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Fetch bundled Ubuntu rootfs
         run: |

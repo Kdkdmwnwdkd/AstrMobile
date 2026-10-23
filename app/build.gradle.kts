@@ -82,6 +82,14 @@ android {
         // rootfs 压缩包与原生库不能再被二次压缩，否则解压耗时并可能损坏。
         noCompress += setOf("xz", "tar", "so")
     }
+
+    lint {
+        // 真正的错误才让构建失败；警告不阻断，否则一次引入几千条噪音，没人会看
+        abortOnError = true
+        warningsAsErrors = false
+        // assembleDebug 不触发 lint，避免平时打包多等几分钟
+        checkReleaseBuilds = false
+    }
 }
 
 dependencies {
