@@ -93,8 +93,24 @@ class BehaviorConfigTest {
 
     @Test
     fun `值没变时返回 false，不触发写请求`() {
+        // 用接近真实的完整配置：AstrBot 的默认配置里这些键都存在。
+        // 字段缺失时补默认值本身就算一次改动（第一次会写，之后就稳定了），
+        // 那是另一个用例覆盖的行为。
         val raw = config(
-            """{"wake_prefix": ["/"], "platform_settings": {"reply_with_mention": false}}""",
+            """
+            {
+              "wake_prefix": ["/"],
+              "platform_settings": {
+                "reply_prefix": "",
+                "reply_with_mention": false,
+                "reply_with_quote": false,
+                "friend_message_needs_wake_prefix": false,
+                "unique_session": false,
+                "enable_id_white_list": true,
+                "id_whitelist": []
+              }
+            }
+            """.trimIndent(),
         )
 
         val changed = BehaviorConfig.apply(
@@ -103,6 +119,17 @@ class BehaviorConfigTest {
         )
 
         assertFalse(changed)
+    }
+
+    @Test
+    fun `字段缺失时会补默认值，算作一次改动`() {
+        val raw = config("""{"wake_prefix": ["/"]}""")
+
+        val changed = BehaviorConfig.apply(raw, BehaviorSettings())
+
+        // 第一次保存会把缺的键补齐，之后就不再有改动
+        assertTrue(changed)
+        assertFalse(BehaviorConfig.apply(raw, BehaviorSettings()))
     }
 
     @Test

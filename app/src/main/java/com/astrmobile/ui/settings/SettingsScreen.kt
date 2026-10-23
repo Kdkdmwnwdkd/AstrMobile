@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -329,7 +330,6 @@ fun SettingsScreen(
     }
 }
 
-@Composable
 @Composable
 private fun FaqItem(question: String, answer: String) {
     Column(modifier = Modifier.padding(vertical = Spacing.sm)) {
