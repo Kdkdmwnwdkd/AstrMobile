@@ -32,7 +32,7 @@ class AstrBotConfigReaderTest {
     private fun writeConfig(content: String) {
         paths = newPaths()
         configFile = File(paths.rootfsDir, "root/data/cmd_config.json")
-        configFile.parentFile.mkdirs()
+        configFile.parentFile?.mkdirs()
         configFile.writeText(content)
     }
 

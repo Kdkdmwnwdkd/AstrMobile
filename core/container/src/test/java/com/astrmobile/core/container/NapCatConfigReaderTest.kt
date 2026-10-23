@@ -31,7 +31,7 @@ class NapCatConfigReaderTest {
 
     private fun writeHint(containerPath: String) {
         val hint = File(paths.rootfsDir, "root/.astrmobile-napcat-config")
-        hint.parentFile.mkdirs()
+        hint.parentFile?.mkdirs()
         hint.writeText(containerPath)
     }
 
@@ -45,7 +45,7 @@ class NapCatConfigReaderTest {
 
     private fun writeLog(content: String) {
         val log = File(paths.rootfsDir, "root/napcat.log")
-        log.parentFile.mkdirs()
+        log.parentFile?.mkdirs()
         log.writeText(content)
     }
 
