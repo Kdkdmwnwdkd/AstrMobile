@@ -13,6 +13,7 @@ updates:
     ignore:
       - dependency-name: "androidx.compose*"
       - dependency-name: "com.android.tools.build:gradle"
+      - dependency-name: "com.android.application"
       - dependency-name: "org.jetbrains.kotlin*"
       # Gradle 9 要求 AGP 8.9+ 与 Kotlin 2.x，是一次构建链迁移，不是改一行
       # 版本号能做完的。这类 PR 每周冒出来一次只会变成噪音，需要时单独开 issue。
