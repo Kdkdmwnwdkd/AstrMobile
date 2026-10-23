@@ -30,7 +30,7 @@ android {
 
 dependencies {
     implementation(project(":core:common"))
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.19.1")
     // 用 api 暴露：SettingsRepository 的属性签名会牵引到 DataStore 类型
     api("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
