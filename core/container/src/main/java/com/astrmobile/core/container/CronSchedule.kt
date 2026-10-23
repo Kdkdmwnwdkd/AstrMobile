@@ -40,7 +40,7 @@ object CronSchedule {
         }
     }
 
-    /** `*/30` → 30；`*` 或普通数字返回 null（不是"每 N 分钟"的形态）。 */
+    /** 解析「每 N 分钟」的步进写法（星号 + 斜杠 + 数字）；其它形态返回 null。 */
     private fun step(field: String): Int? {
         if (!field.startsWith("*/")) return null
         return field.removePrefix("*/").toIntOrNull()?.takeIf { it in 1..59 }
