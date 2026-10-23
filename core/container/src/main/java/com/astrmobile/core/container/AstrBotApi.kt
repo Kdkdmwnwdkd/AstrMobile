@@ -849,6 +849,47 @@ class AstrBotApi(private val port: Int = 6185) {
         }
     }
 
+    // ---------------------------------------------------------------- 会话管理
+
+    /**
+     * 修改会话标题。
+     *
+     * 注意 `user_id` 是**必需的 query 参数**，不是从 Cookie 推出来的——
+     * 服务端要拿它定位记录。会话列表里每条都带着 userId，直接用。
+     */
+    suspend fun renameConversation(
+        cookie: String,
+        cid: String,
+        userId: String,
+        title: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val path = "/conversations/${encodePath(cid)}?user_id=${encodePath(userId)}"
+        write("PATCH", path, cookie, JSONObject().put("title", title.trim()).toString(), "重命名会话")
+    }
+
+    /**
+     * 删除一个会话及其消息。
+     *
+     * 删的是 AstrBot 存在数据库里的对话记录，网页后台也看不到了；
+     * QQ 客户端里的聊天记录不受影响。界面上要说清楚这点，
+     * 否则用户会以为连 QQ 里的消息一起删了。
+     */
+    suspend fun deleteConversation(
+        cookie: String,
+        cid: String,
+        userId: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val path = "/conversations/${encodePath(cid)}?user_id=${encodePath(userId)}"
+        write("DELETE", path, cookie, null, "删除会话")
+    }
+
+    /**
+     * 会话 id 形如 `aiocqhttp:GroupMessage:123456`，冒号必须编码，
+     * 否则某些代理或 URL 解析器会把它当 scheme 分隔符。
+     */
+    private fun encodePath(value: String): String =
+        java.net.URLEncoder.encode(value, "UTF-8")
+
     // ---------------------------------------------------------------- 行为配置
 
     /**

@@ -46,6 +46,12 @@ import com.astrmobile.ui.components.EmptyState
 import kotlinx.coroutines.launch
 import com.astrmobile.core.ui.Spacing
 import com.astrmobile.ui.components.InlineLoading
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedTextField
 
 private const val PAGE_SIZE = 20
 
@@ -65,6 +71,10 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     var page by remember { mutableIntStateOf(1) }
     var hasMore by remember { mutableStateOf(false) }
     var loadingMore by remember { mutableStateOf(false) }
+    // 正在重命名/待删除的会话。null 表示没有弹窗。
+    var renaming by remember { mutableStateOf<ConversationSummary?>(null) }
+    var deleting by remember { mutableStateOf<ConversationSummary?>(null) }
+    var renameText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(reloadKey) {
@@ -151,6 +161,11 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         onToggle = {
                             expanded = if (expanded == conversation.cid) null else conversation.cid
                         },
+                        onRename = {
+                            renameText = conversation.title
+                            renaming = conversation
+                        },
+                        onDelete = { deleting = conversation },
                     )
                     Spacer(Modifier.height(Spacing.sm))
                 }
@@ -197,6 +212,81 @@ fun ConversationsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
         Spacer(Modifier.height(Spacing.lg))
     }
+
+    // ---------------------------------------------------------------- 重命名
+    renaming?.let { target ->
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("重命名会话") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    label = { Text("标题") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = renameText.isNotBlank(),
+                    onClick = {
+                        val title = renameText
+                        renaming = null
+                        scope.launch {
+                            viewModel.renameConversation(target, title).fold(
+                                onSuccess = {
+                                    message = null
+                                    reloadKey++
+                                },
+                                onFailure = { message = it.message ?: "重命名失败" },
+                            )
+                        }
+                    },
+                ) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renaming = null }) { Text("取消") }
+            },
+        )
+    }
+
+    // ---------------------------------------------------------------- 删除
+    deleting?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("删除这个会话？") },
+            text = {
+                Text(
+                    "会删掉这台设备上的对话历史，网页后台也看不到了。" +
+                        "QQ 里的聊天记录不受影响。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deleting = null
+                        scope.launch {
+                            viewModel.deleteConversation(target).fold(
+                                onSuccess = {
+                                    message = null
+                                    // 删掉的如果是展开着的那个，顺手收起来
+                                    if (expanded == target.cid) expanded = null
+                                    reloadKey++
+                                },
+                                onFailure = { message = it.message ?: "删除失败" },
+                            )
+                        }
+                    },
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleting = null }) { Text("取消") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -204,7 +294,10 @@ private fun ConversationCard(
     conversation: ConversationSummary,
     expanded: Boolean,
     onToggle: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     val last = conversation.history.lastOrNull()
 
     Card(
@@ -236,6 +329,39 @@ private fun ConversationCard(
                         if (expanded) "收起" else "${conversation.history.size} 条",
                         fontSize = 12.sp,
                     )
+                }
+
+                Box {
+                    IconButton(
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = "更多",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("重命名") },
+                            onClick = {
+                                menuOpen = false
+                                onRename()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("删除", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                menuOpen = false
+                                onDelete()
+                            },
+                        )
+                    }
                 }
             }
 
