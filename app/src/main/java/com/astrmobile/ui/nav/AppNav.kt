@@ -27,6 +27,7 @@ import androidx.navigation.navArgument
 import com.astrmobile.MainViewModel
 import com.astrmobile.ui.console.ConsoleScreen
 import com.astrmobile.ui.conversations.ConversationsScreen
+import com.astrmobile.ui.chat.ChatScreen
 import com.astrmobile.ui.cron.CronScreen
 import com.astrmobile.ui.dashboard.DashboardScreen
 import com.astrmobile.ui.models.ModelScreen
@@ -57,6 +58,7 @@ object Routes {
     const val Conversations = "conversations"
     const val ScreenReader = "screen"
     const val Cron = "cron"
+    const val Chat = "chat"
     const val PluginConfig = "pluginconfig/{pluginId}"
 
     // 目录名理论上不含特殊字符，但导航参数必须编码，
@@ -168,6 +170,7 @@ fun AppNav(viewModel: MainViewModel) {
                     onOpenConversations = { navController.navigate(Routes.Conversations) },
                     onOpenScreen = { navController.navigate(Routes.ScreenReader) },
                     onOpenCron = { navController.navigate(Routes.Cron) },
+                    onOpenChat = { navController.navigate(Routes.Chat) },
                     onRepair = {
                         viewModel.prepareReinstall()
                         navController.navigate(Routes.Onboarding)
@@ -264,6 +267,13 @@ fun AppNav(viewModel: MainViewModel) {
 
             composable(Routes.ScreenReader) {
                 ScreenReaderScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.Chat) {
+                ChatScreen(
                     viewModel = viewModel,
                     onBack = { navController.popBackStack() },
                 )

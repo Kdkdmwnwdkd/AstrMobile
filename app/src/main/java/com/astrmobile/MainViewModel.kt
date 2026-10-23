@@ -788,6 +788,96 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .distinctBy { it.first }
     }
 
+    // ---------------------------------------------------------------- 试聊
+
+    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
+
+    private val _chatBusy = MutableStateFlow(false)
+    val chatBusy: StateFlow<Boolean> = _chatBusy.asStateFlow()
+
+    /** 当前试聊会话。为空时下一条消息会自动新建一个。 */
+    private var chatSessionId: String? = null
+
+    /**
+     * 开始一段新对话。
+     *
+     * 只清空本地列表，实际会话 id 在下次发消息时惰性创建——用户点进来
+     * 又马上退出的话，不该在后台留一堆空会话。
+     */
+    fun resetChat() {
+        _chatMessages.value = emptyList()
+        chatSessionId = null
+    }
+
+    /**
+     * 发一条消息并流式接收回复。
+     *
+     * 先插入用户消息和一条空的机器人消息，然后随着 SSE 事件不断替换
+     * 最后这条的内容。这样用户能立刻看到自己说的话和自己的提问，
+     * 而不是等模型开始输出才有反馈。
+     */
+    suspend fun sendChat(text: String) {
+        val content = text.trim()
+        if (content.isEmpty() || _chatBusy.value) return
+
+        val cookie = loginAstrBot().getOrElse { error ->
+            _chatMessages.value = _chatMessages.value + ChatMessage(
+                role = ChatMessage.Role.Bot,
+                text = "",
+                error = error.message ?: "登录后台失败，容器在运行吗？",
+            )
+            return
+        }
+
+        // 没有会话就先建一个。放在这里而不是进入页面时，
+        // 是为了避免"只是点进来看看"也留下一个空会话。
+        val sessionId = chatSessionId ?: AstrBotApi().newChatSession(cookie)
+            .getOrElse { error ->
+                _chatMessages.value = _chatMessages.value + ChatMessage(
+                    role = ChatMessage.Role.Bot,
+                    text = "",
+                    error = error.message ?: "新建会话失败",
+                )
+                return
+            }
+            .also { chatSessionId = it }
+
+        _chatBusy.value = true
+        _chatMessages.value = _chatMessages.value +
+            ChatMessage(role = ChatMessage.Role.User, text = content) +
+            ChatMessage(role = ChatMessage.Role.Bot, text = "", streaming = true)
+
+        AstrBotApi().sendChatMessage(cookie, sessionId, content) { state ->
+            updateLastBotMessage {
+                it.copy(
+                    text = state.text,
+                    thinking = state.thinking,
+                    streaming = !state.done,
+                    error = state.error,
+                )
+            }
+        }.onFailure { error ->
+            updateLastBotMessage {
+                it.copy(
+                    streaming = false,
+                    error = it.error ?: error.message ?: "发送失败",
+                )
+            }
+        }
+
+        // 不管成功失败，都要把 streaming 复位，否则光标一直闪
+        updateLastBotMessage { it.copy(streaming = false) }
+        _chatBusy.value = false
+    }
+
+    private fun updateLastBotMessage(transform: (ChatMessage) -> ChatMessage) {
+        val current = _chatMessages.value
+        val index = current.indexOfLast { it.role == ChatMessage.Role.Bot }
+        if (index < 0) return
+        _chatMessages.value = current.toMutableList().also { it[index] = transform(it[index]) }
+    }
+
     suspend fun currentSettings(): AppSettings = settings.value
 
     override fun onCleared() {
