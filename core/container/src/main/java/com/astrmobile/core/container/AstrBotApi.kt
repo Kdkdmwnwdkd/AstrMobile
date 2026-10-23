@@ -186,6 +186,9 @@ class AstrBotApi(private val port: Int = 6185) {
                         }.ifBlank {
                             umoInfo?.optString("session_id").orEmpty()
                         }.ifBlank { "未命名会话" },
+                        umo = item.optString("umo").ifBlank {
+                            umoInfo?.optString("session_id").orEmpty()
+                        },
                         messageType = umoInfo?.optString("message_type").orEmpty(),
                         updatedAt = item.optLong("updated_at"),
                         history = history,
@@ -840,6 +843,8 @@ data class ConversationMessage(
 /** 一个会话的摘要 + 完整历史。 */
 data class ConversationSummary(
     val cid: String,
+    /** 会话标识，形如 `aiocqhttp:GroupMessage:123456`。创建定时任务时要填它。 */
+    val umo: String,
     val userId: String,
     val title: String,
     val messageType: String,

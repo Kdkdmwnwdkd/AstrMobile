@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material3.Button
@@ -94,6 +95,7 @@ fun DashboardScreen(
     onOpenBackup: () -> Unit,
     onOpenConversations: () -> Unit,
     onOpenScreen: () -> Unit,
+    onOpenCron: () -> Unit,
     onRepair: () -> Unit,
 ) {
     val state by viewModel.containerState.collectAsStateWithLifecycle()
@@ -285,6 +287,12 @@ fun DashboardScreen(
                     title = "知识",
                     modifier = Modifier.weight(1f),
                     onClick = onOpenKnowledge,
+                )
+                QuickTile(
+                    icon = Icons.Rounded.Schedule,
+                    title = "定时",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenCron,
                 )
             }
             Spacer(Modifier.height(8.dp))
