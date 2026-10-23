@@ -649,13 +649,14 @@ class AstrBotApi(private val port: Int = 6185) {
         cronExpression: String,
         session: String,
         note: String,
+        enabled: Boolean = true,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("name", name)
             .put("cron_expression", cronExpression)
             .put("session", session)
             .put("note", note)
-            .put("enabled", true)
+            .put("enabled", enabled)
             .toString()
 
         write("POST", "/cron/jobs", cookie, body, "创建定时任务")

@@ -18,10 +18,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -55,6 +57,14 @@ import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.launch
 
+/** 常用时间模板：让不想学 Cron 的人也能用起来。 */
+private val TEMPLATES = listOf(
+    "每天 08:00" to "0 8 * * *",
+    "每天 22:30" to "30 22 * * *",
+    "工作日 09:00" to "0 9 * * 1-5",
+    "每周日 20:00" to "0 20 * * 0",
+)
+
 /**
  * 定时任务。
  *
@@ -72,7 +82,10 @@ fun CronScreen(
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var showCreate by remember { mutableStateOf(false) }
+
+    // null = 新建；非 null = 编辑这条
+    var editing by remember { mutableStateOf<CronJob?>(null) }
+    var showDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.refreshCronJobs() }
 
@@ -151,6 +164,10 @@ fun CronScreen(
                                 }
                         }
                     },
+                    onEdit = {
+                        editing = job
+                        showDialog = true
+                    },
                     onDelete = {
                         scope.launch {
                             viewModel.deleteCronJob(job).onFailure {
@@ -166,7 +183,10 @@ fun CronScreen(
         Spacer(Modifier.height(Spacing.sm))
 
         Button(
-            onClick = { showCreate = true },
+            onClick = {
+                editing = null
+                showDialog = true
+            },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(Radius.md),
         ) {
@@ -183,11 +203,12 @@ fun CronScreen(
         )
     }
 
-    if (showCreate) {
-        CreateCronDialog(
+    if (showDialog) {
+        CronJobDialog(
             viewModel = viewModel,
-            onDismiss = { showCreate = false },
-            onCreated = { showCreate = false },
+            editing = editing,
+            onDismiss = { showDialog = false },
+            onDone = { showDialog = false },
         )
     }
 }
@@ -197,6 +218,7 @@ private fun CronJobCard(
     job: CronJob,
     onToggle: (Boolean) -> Unit,
     onRunNow: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     // 认不出来的表达式原样显示，不要瞎猜
@@ -233,19 +255,28 @@ private fun CronJobCard(
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             OutlinedButton(
                 onClick = onRunNow,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1.2f),
                 shape = RoundedCornerShape(Radius.sm),
             ) {
                 Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(Spacing.xs))
-                Text("立即执行")
+                Text("执行")
+            }
+            OutlinedButton(
+                onClick = onEdit,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(Radius.sm),
+            ) {
+                Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(Spacing.xs))
+                Text("编辑")
             }
             OutlinedButton(
                 onClick = onDelete,
-                modifier = Modifier.weight(0.7f),
+                modifier = Modifier.weight(0.9f),
                 shape = RoundedCornerShape(Radius.sm),
             ) {
-                Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.DeleteOutline, contentDescription = null, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(Spacing.xs))
                 Text("删除")
             }
@@ -254,18 +285,19 @@ private fun CronJobCard(
 }
 
 @Composable
-private fun CreateCronDialog(
+private fun CronJobDialog(
     viewModel: MainViewModel,
+    editing: CronJob?,
     onDismiss: () -> Unit,
-    onCreated: () -> Unit,
+    onDone: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var name by remember { mutableStateOf("") }
-    var expression by remember { mutableStateOf("0 8 * * *") }
-    var session by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+    var name by remember(editing) { mutableStateOf(editing?.name.orEmpty()) }
+    var expression by remember(editing) { mutableStateOf(editing?.cronExpression ?: "0 8 * * *") }
+    var session by remember(editing) { mutableStateOf(editing?.session.orEmpty()) }
+    var note by remember(editing) { mutableStateOf(editing?.note.orEmpty()) }
 
     var submitting by remember { mutableStateOf(false) }
     var choices by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
@@ -276,7 +308,7 @@ private fun CreateCronDialog(
 
     AlertDialog(
         onDismissRequest = { if (!submitting) onDismiss() },
-        title = { Text("新建定时任务") },
+        title = { Text(if (editing == null) "新建定时任务" else "编辑任务") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(
@@ -317,6 +349,26 @@ private fun CreateCronDialog(
 
                 Spacer(Modifier.height(Spacing.sm))
 
+                // 常用模板：不懂 Cron 也能用
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    TEMPLATES.take(2).forEach { (label, value) ->
+                        AssistChip(
+                            onClick = { expression = value },
+                            label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    TEMPLATES.drop(2).forEach { (label, value) ->
+                        AssistChip(
+                            onClick = { expression = value },
+                            label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(Spacing.sm))
+
                 OutlinedTextField(
                     value = session,
                     onValueChange = { session = it },
@@ -327,20 +379,16 @@ private fun CreateCronDialog(
                     shape = RoundedCornerShape(Radius.sm),
                 )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                choices = viewModel.cronSessionChoices()
-                                showPicker = true
-                            }
-                        },
-                    ) {
-                        Text("从会话列表选择")
-                    }
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            choices = viewModel.cronSessionChoices()
+                            showPicker = true
+                        }
+                    },
+                ) {
+                    Text("从会话列表选择")
                 }
-
-                Spacer(Modifier.height(Spacing.sm))
 
                 OutlinedTextField(
                     value = note,
@@ -359,17 +407,29 @@ private fun CreateCronDialog(
                 onClick = {
                     submitting = true
                     scope.launch {
-                        viewModel.createCronJob(
-                            name = name.trim(),
-                            cronExpression = expression.trim(),
-                            session = session.trim(),
-                            note = note.trim(),
-                        )
-                            .onSuccess { onCreated() }
+                        val result = if (editing == null) {
+                            viewModel.createCronJob(
+                                name = name.trim(),
+                                cronExpression = expression.trim(),
+                                session = session.trim(),
+                                note = note.trim(),
+                            )
+                        } else {
+                            viewModel.updateCronJob(
+                                original = editing,
+                                name = name.trim(),
+                                cronExpression = expression.trim(),
+                                session = session.trim(),
+                                note = note.trim(),
+                            )
+                        }
+
+                        result
+                            .onSuccess { onDone() }
                             .onFailure {
                                 Toast.makeText(
                                     context,
-                                    it.message ?: "创建失败",
+                                    it.message ?: "保存失败",
                                     Toast.LENGTH_LONG,
                                 ).show()
                             }
@@ -377,7 +437,13 @@ private fun CreateCronDialog(
                     }
                 },
             ) {
-                Text(if (submitting) "创建中…" else "创建")
+                Text(
+                    when {
+                        submitting -> "保存中…"
+                        editing == null -> "创建"
+                        else -> "保存"
+                    },
+                )
             }
         },
         dismissButton = {
