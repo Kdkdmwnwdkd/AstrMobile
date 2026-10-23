@@ -14,6 +14,7 @@ import com.astrmobile.core.container.CheckItem
 import com.astrmobile.core.container.ConfiguredModel
 import com.astrmobile.core.container.DiagnosticsExporter
 import com.astrmobile.core.container.ConversationSummary
+import com.astrmobile.core.container.CronJob
 import com.astrmobile.core.container.Diagnostics
 import com.astrmobile.core.container.DashboardCredentials
 import com.astrmobile.core.container.EmbeddingConfig
@@ -677,6 +678,82 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 usageFetchedAt = now
             }
             .onFailure { _usageError.value = it.message ?: "读取用量失败" }
+    }
+
+    // ---------------------------------------------------------------- 定时任务
+
+    private val _cronJobs = MutableStateFlow<List<CronJob>>(emptyList())
+    val cronJobs: StateFlow<List<CronJob>> = _cronJobs.asStateFlow()
+
+    private val _cronBusy = MutableStateFlow(false)
+    val cronBusy: StateFlow<Boolean> = _cronBusy.asStateFlow()
+
+    private val _cronError = MutableStateFlow<String?>(null)
+    val cronError: StateFlow<String?> = _cronError.asStateFlow()
+
+    suspend fun refreshCronJobs() {
+        val cookie = loginAstrBot().getOrElse {
+            _cronError.value = it.message ?: "登录后台失败，容器在运行吗？"
+            return
+        }
+
+        _cronBusy.value = true
+        AstrBotApi().listCronJobs(cookie)
+            .onSuccess {
+                _cronJobs.value = it
+                _cronError.value = null
+            }
+            .onFailure { _cronError.value = it.message ?: "读取定时任务失败" }
+        _cronBusy.value = false
+    }
+
+    suspend fun createCronJob(
+        name: String,
+        cronExpression: String,
+        session: String,
+        note: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
+        val result = AstrBotApi().createCronJob(cookie, name, cronExpression, session, note)
+        if (result.isSuccess) refreshCronJobs()
+        result
+    }
+
+    suspend fun toggleCronJob(job: CronJob, enabled: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
+            val result = AstrBotApi().setCronEnabled(cookie, job.id, enabled)
+            if (result.isSuccess) refreshCronJobs()
+            result
+        }
+
+    suspend fun deleteCronJob(job: CronJob): Result<Unit> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
+        val result = AstrBotApi().deleteCronJob(cookie, job.id)
+        if (result.isSuccess) refreshCronJobs()
+        result
+    }
+
+    suspend fun runCronJobNow(job: CronJob): Result<Unit> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
+        AstrBotApi().runCronNow(cookie, job.id)
+    }
+
+    /**
+     * 可选的目标会话（UMO + 标题）。
+     *
+     * 让用户手写 `aiocqhttp:GroupMessage:123456` 不现实，从最近的会话里挑一个
+     * 才是手机上该有的交互。取不到就返回空列表，界面退化为手动输入。
+     */
+    suspend fun cronSessionChoices(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val cookie = loginAstrBot().getOrNull() ?: return@withContext emptyList()
+        AstrBotApi().listConversations(cookie, pageSize = 50)
+            .getOrDefault(emptyList())
+            .mapNotNull { conversation ->
+                conversation.umo.takeIf { it.isNotBlank() }
+                    ?.let { umo -> umo to conversation.title }
+            }
+            .distinctBy { it.first }
     }
 
     suspend fun currentSettings(): AppSettings = settings.value
