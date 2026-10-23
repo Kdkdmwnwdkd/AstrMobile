@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  只暴露两个目录：
+  只暴露三个目录：
   - runtime/logs  导出排错日志
   - backups       导出备份包
+  - diagnostics   导出诊断包（cacheDir）
   绝不把 rootfs 或配置目录整体交给外部应用。
 -->
 <paths>
     <files-path name="runtime_logs" path="runtime/logs/" />
     <files-path name="backups" path="backups/" />
+    <cache-path name="diagnostics" path="diagnostics/" />
 </paths>

@@ -1,6 +1,7 @@
 package com.astrmobile
 
 import android.app.Application
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.astrmobile.core.container.AstrBotApi
@@ -11,6 +12,7 @@ import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.container.CheckItem
 import com.astrmobile.core.container.ConfiguredModel
+import com.astrmobile.core.container.DiagnosticsExporter
 import com.astrmobile.core.container.ConversationSummary
 import com.astrmobile.core.container.Diagnostics
 import com.astrmobile.core.container.DashboardCredentials
@@ -605,6 +607,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _environmentReady.value = false
             controller.refreshInstallState()
         }
+    }
+
+    /**
+     * 生成诊断包：日志尾部 + 脱敏后的配置 + 环境信息。
+     *
+     * 只读操作，不碰容器；导出失败不影响正在运行的机器人。
+     */
+    suspend fun exportDiagnostics(): Result<File> = withContext(Dispatchers.IO) {
+        val context = getApplication<Application>()
+        val target = File(
+            File(context.cacheDir, "diagnostics"),
+            "AstrMobile-diagnostics-${System.currentTimeMillis()}.zip",
+        )
+        val meta = mapOf(
+            "应用版本" to "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            "Android" to "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            "机型" to "${Build.MANUFACTURER} ${Build.MODEL}",
+            "容器状态" to describeContainer(containerState.value),
+        )
+        DiagnosticsExporter.export(appContainer.paths, target, meta)
+    }
+
+    private fun describeContainer(state: ContainerState): String = when (state) {
+        ContainerState.NotInstalled -> "未安装"
+        ContainerState.Stopped -> "已停止"
+        ContainerState.Starting -> "启动中"
+        ContainerState.Stopping -> "停止中"
+        is ContainerState.Running ->
+            "运行中（AstrBot=${state.astrbotReady}, NapCat=${state.napcatReady}）"
+        is ContainerState.Restarting ->
+            "重启中（${state.attempt}/${state.maxAttempts}，${state.lastReason}）"
+        is ContainerState.Failed -> "失败：${state.reason}"
     }
 
     suspend fun currentSettings(): AppSettings = settings.value
