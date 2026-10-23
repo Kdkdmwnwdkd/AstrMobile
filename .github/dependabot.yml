@@ -15,6 +15,11 @@ updates:
       - dependency-name: "com.android.tools.build:gradle"
       - dependency-name: "com.android.application"
       - dependency-name: "org.jetbrains.kotlin*"
+      # core-ktx 1.16+ 与 navigation 2.9+ 都是用 Kotlin 2.x 编译的，
+      # 在 Kotlin 1.9 上会直接报「metadata version 2.1.0，期望 1.9.0」。
+      # 这类 PR 不是升级，是构建链迁移的一部分，见 issue #30。
+      - dependency-name: "androidx.core*"
+      - dependency-name: "androidx.navigation*"
       # Gradle 9 要求 AGP 8.9+ 与 Kotlin 2.x，是一次构建链迁移，不是改一行
       # 版本号能做完的。这类 PR 每周冒出来一次只会变成噪音，需要时单独开 issue。
       - dependency-name: "gradle"
