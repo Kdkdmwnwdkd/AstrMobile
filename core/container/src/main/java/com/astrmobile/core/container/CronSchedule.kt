@@ -11,6 +11,90 @@ package com.astrmobile.core.container
  */
 object CronSchedule {
 
+    /** 一条定时任务的时间规格。只覆盖最常见的四种形态。 */
+    data class ScheduleSpec(
+        val kind: Kind,
+        val hour: Int,
+        val minute: Int,
+        /** Weekly 用：1=周一 … 7=周日。 */
+        val weekday: Int = 1,
+        /** Monthly 用：1..28（29-31 在小月不存在，避开）。 */
+        val dayOfMonth: Int = 1,
+    ) {
+        enum class Kind { Daily, Weekdays, Weekly, Monthly }
+    }
+
+    /**
+     * 规格 → 表达式。
+     *
+     * 越界值会被夹到合法范围而不是抛异常：时间选择器理论上不会给出
+     * 25 点，但输入框可以，静默修正比崩在对话框里好。
+     */
+    fun build(spec: ScheduleSpec): String {
+        val hour = spec.hour.coerceIn(0, 23)
+        val minute = spec.minute.coerceIn(0, 59)
+        return when (spec.kind) {
+            ScheduleSpec.Kind.Daily -> "$minute $hour * * *"
+            ScheduleSpec.Kind.Weekdays -> "$minute $hour * * 1-5"
+            // cron 里 0 和 7 都表示周日，统一写 0
+            ScheduleSpec.Kind.Weekly ->
+                "$minute $hour * * ${if (spec.weekday == 7) 0 else spec.weekday.coerceIn(1, 6)}"
+            ScheduleSpec.Kind.Monthly -> "$minute $hour ${spec.dayOfMonth.coerceIn(1, 28)} * *"
+        }
+    }
+
+    /**
+     * 表达式 → 规格。认不出来返回 null，界面退回"手动填表达式"。
+     *
+     * 只认四种规整形态。`0 9-18 * * *`、`0 0 1,15 * *` 这类一律 null——
+     * 硬塞进"每天"的模型里会改变含义，那比不解析危险。
+     */
+    fun parse(expression: String): ScheduleSpec? {
+        val parts = expression.trim().split(Regex("\\s+"))
+        if (parts.size != 5) return null
+
+        val (minuteText, hourText, day, month, weekday) = parts
+        val minute = minuteText.toIntOrNull()?.takeIf { it in 0..59 } ?: return null
+        val hour = hourText.toIntOrNull()?.takeIf { it in 0..23 } ?: return null
+        if (month != "*") return null
+
+        return when {
+            day == "*" && weekday == "*" ->
+                ScheduleSpec(ScheduleSpec.Kind.Daily, hour, minute)
+
+            day == "*" && (weekday == "1-5" || weekday == "1,2,3,4,5") ->
+                ScheduleSpec(ScheduleSpec.Kind.Weekdays, hour, minute)
+
+            day == "*" -> {
+                val index = weekday.toIntOrNull()?.takeIf { it in 0..7 } ?: return null
+                ScheduleSpec(
+                    kind = ScheduleSpec.Kind.Weekly,
+                    hour = hour,
+                    minute = minute,
+                    weekday = if (index == 0 || index == 7) 7 else index,
+                )
+            }
+
+            weekday == "*" -> {
+                val dom = day.toIntOrNull()?.takeIf { it in 1..28 } ?: return null
+                ScheduleSpec(ScheduleSpec.Kind.Monthly, hour, minute, dayOfMonth = dom)
+            }
+
+            else -> null
+        }
+    }
+
+    /** 每周几的中文名，给界面上的星期选择用。 */
+    fun weekdayLabel(weekday: Int): String = when (weekday) {
+        1 -> "周一"
+        2 -> "周二"
+        3 -> "周三"
+        4 -> "周四"
+        5 -> "周五"
+        6 -> "周六"
+        else -> "周日"
+    }
+
     /** 一条定时任务的时间描述，形如「每天 08:00」。 */
     fun describe(expression: String): String? {
         val parts = expression.trim().split(Regex("\\s+"))

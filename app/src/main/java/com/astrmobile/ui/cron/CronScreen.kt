@@ -56,6 +56,12 @@ import com.astrmobile.ui.components.HintText
 import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.launch
 import com.astrmobile.ui.components.InlineLoading
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TimeInput
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.ui.text.font.FontFamily
+import java.util.Locale
 
 /** 常用时间模板：让不想学 Cron 的人也能用起来。 */
 private val TEMPLATES = listOf(
@@ -292,6 +298,9 @@ private fun CronJobDialog(
 
     var name by remember(editing) { mutableStateOf(editing?.name.orEmpty()) }
     var expression by remember(editing) { mutableStateOf(editing?.cronExpression ?: "0 8 * * *") }
+    // 表达式能解析成四种规整形态就用选择器，否则直接进手动模式。
+    // 编辑一个复杂表达式（比如 `0 9-18 * * *`）时，硬塞进选择器会改掉它的含义。
+    var manual by remember(editing) { mutableStateOf(CronSchedule.parse(expression) == null) }
     var session by remember(editing) { mutableStateOf(editing?.session.orEmpty()) }
     var note by remember(editing) { mutableStateOf(editing?.note.orEmpty()) }
 
@@ -319,49 +328,12 @@ private fun CronJobDialog(
 
                 Spacer(Modifier.height(Spacing.sm))
 
-                OutlinedTextField(
-                    value = expression,
-                    onValueChange = { expression = it },
-                    label = { Text("执行时间（Cron 表达式）") },
-                    singleLine = true,
-                    isError = expression.isNotBlank() && !expressionOk,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(Radius.sm),
+                TimePickerField(
+                    expression = expression,
+                    manual = manual,
+                    onExpressionChange = { expression = it },
+                    onManualChange = { manual = it },
                 )
-
-                Spacer(Modifier.height(Spacing.xs))
-                Text(
-                    text = when {
-                        expression.isBlank() -> "格式：分 时 日 月 周，例如 0 8 * * * = 每天 08:00"
-                        !expressionOk -> "格式不对：需要 5 段，用空格分隔"
-                        else -> CronSchedule.describe(expression) ?: "无法识别，将按原样提交"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = when {
-                        expression.isNotBlank() && !expressionOk -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-
-                Spacer(Modifier.height(Spacing.sm))
-
-                // 常用模板：不懂 Cron 也能用
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    TEMPLATES.take(2).forEach { (label, value) ->
-                        AssistChip(
-                            onClick = { expression = value },
-                            label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-                        )
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    TEMPLATES.drop(2).forEach { (label, value) ->
-                        AssistChip(
-                            onClick = { expression = value },
-                            label = { Text(label, style = MaterialTheme.typography.labelMedium) },
-                        )
-                    }
-                }
 
                 Spacer(Modifier.height(Spacing.sm))
 
@@ -495,4 +467,194 @@ private fun CronJobDialog(
             },
         )
     }
+}
+
+/**
+ * 执行时间选择。
+ *
+ * 之前这里就是一个 Cron 表达式输入框，配两行模板。但「每天 7:30」这种
+ * 最普通的需求也得自己写 `30 7 * * *`——模板覆盖不到的都得查语法。
+ *
+ * 现在默认是选择器：频率四选一 + 时间点 + 周几/几号。表达式实时生成，
+ * 用一行小字显示出来（想学的人能看到对应关系）。
+ *
+ * 认不出的表达式直接进手动模式。把一个 `0 9-18 * * *` 硬塞进「每天」
+ * 会改掉它的含义，那比不支持更糟。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickerField(
+    expression: String,
+    manual: Boolean,
+    onExpressionChange: (String) -> Unit,
+    onManualChange: (Boolean) -> Unit,
+) {
+    val spec = CronSchedule.parse(expression)
+    var showPicker by remember { mutableStateOf(false) }
+
+    if (manual || spec == null) {
+        val valid = CronSchedule.looksValid(expression)
+
+        OutlinedTextField(
+            value = expression,
+            onValueChange = onExpressionChange,
+            label = { Text("执行时间（Cron 表达式）") },
+            singleLine = true,
+            isError = expression.isNotBlank() && !valid,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(Radius.sm),
+        )
+        Spacer(Modifier.height(Spacing.xs))
+        Text(
+            text = when {
+                expression.isBlank() -> "格式：分 时 日 月 周，例如 0 8 * * * = 每天 08:00"
+                !valid -> "格式不对：需要 5 段，用空格分隔"
+                else -> CronSchedule.describe(expression) ?: "无法识别，将按原样提交"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (expression.isNotBlank() && !valid) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+
+        Spacer(Modifier.height(Spacing.sm))
+        // 手动模式下保留模板：每 30 分钟这类选择器表达不了的形态仍然有用
+        TEMPLATES.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                row.forEach { (label, value) ->
+                    AssistChip(
+                        onClick = { onExpressionChange(value) },
+                        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                    )
+                }
+            }
+        }
+
+        if (spec != null) {
+            TextButton(onClick = { onManualChange(false) }) { Text("改用选择器") }
+        }
+        return
+    }
+
+    // ---------------------------------------------------------- 选择器
+
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        CronSchedule.ScheduleSpec.Kind.values().forEach { kind ->
+            FilterChip(
+                selected = spec.kind == kind,
+                onClick = { onExpressionChange(CronSchedule.build(spec.copy(kind = kind))) },
+                label = { Text(kindLabel(kind), style = MaterialTheme.typography.labelMedium) },
+            )
+        }
+    }
+
+    Spacer(Modifier.height(Spacing.sm))
+
+    AssistChip(
+        onClick = { showPicker = true },
+        label = {
+            Text(
+                text = String.format(Locale.US, "%02d:%02d", spec.hour, spec.minute),
+                style = MaterialTheme.typography.titleMedium,
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Rounded.Schedule,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+    )
+
+    when (spec.kind) {
+        CronSchedule.ScheduleSpec.Kind.Weekly -> {
+            Spacer(Modifier.height(Spacing.xs))
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                (1..7).forEach { day ->
+                    FilterChip(
+                        selected = spec.weekday == day,
+                        onClick = {
+                            onExpressionChange(CronSchedule.build(spec.copy(weekday = day)))
+                        },
+                        label = {
+                            // 一行放七个，只能留一个字
+                            Text(
+                                text = CronSchedule.weekdayLabel(day).removePrefix("周"),
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+
+        CronSchedule.ScheduleSpec.Kind.Monthly -> {
+            Spacer(Modifier.height(Spacing.xs))
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                listOf(1, 5, 10, 15, 20, 28).forEach { day ->
+                    FilterChip(
+                        selected = spec.dayOfMonth == day,
+                        onClick = {
+                            onExpressionChange(CronSchedule.build(spec.copy(dayOfMonth = day)))
+                        },
+                        label = {
+                            Text(day.toString(), style = MaterialTheme.typography.labelMedium)
+                        },
+                    )
+                }
+            }
+        }
+
+        else -> Unit
+    }
+
+    Spacer(Modifier.height(Spacing.xs))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = expression,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = { onManualChange(true) }) { Text("手动输入") }
+    }
+
+    if (showPicker) {
+        val timeState = rememberTimePickerState(
+            initialHour = spec.hour,
+            initialMinute = spec.minute,
+            is24Hour = true,
+        )
+        AlertDialog(
+            onDismissRequest = { showPicker = false },
+            title = { Text("选择时间") },
+            text = { TimeInput(state = timeState) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onExpressionChange(
+                            CronSchedule.build(
+                                spec.copy(hour = timeState.hour, minute = timeState.minute),
+                            ),
+                        )
+                        showPicker = false
+                    },
+                ) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("取消") }
+            },
+        )
+    }
+}
+
+private fun kindLabel(kind: CronSchedule.ScheduleSpec.Kind): String = when (kind) {
+    CronSchedule.ScheduleSpec.Kind.Daily -> "每天"
+    CronSchedule.ScheduleSpec.Kind.Weekdays -> "工作日"
+    CronSchedule.ScheduleSpec.Kind.Weekly -> "每周"
+    CronSchedule.ScheduleSpec.Kind.Monthly -> "每月"
 }
