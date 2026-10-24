@@ -54,6 +54,8 @@ import com.astrmobile.ui.components.SectionCard
 import kotlinx.coroutines.launch
 import com.astrmobile.core.ui.Spacing
 import com.astrmobile.ui.components.InlineLoading
+import androidx.compose.material3.OutlinedButton
+import com.astrmobile.core.container.ModelProbe
 
 /**
  * 模型配置页。
@@ -85,6 +87,8 @@ fun ModelScreen(
     var keyVisible by remember { mutableStateOf(false) }
 
     var busy by remember { mutableStateOf(false) }
+    var probing by remember { mutableStateOf(false) }
+    var probeResult by remember { mutableStateOf<ModelProbe.Result?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var isError by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(false) }
@@ -267,6 +271,49 @@ fun ModelScreen(
             )
 
             Spacer(Modifier.height(Spacing.lg))
+
+            // 测试连接：只发 GET /models，不消耗 token。
+            // 保存按钮会把 apiKey 清空，所以必须能在保存前单独试。
+            OutlinedButton(
+                onClick = {
+                    probing = true
+                    probeResult = null
+                    scope.launch {
+                        probeResult = ModelProbe.probe(apiBase, apiKey)
+                        probing = false
+                    }
+                },
+                enabled = !probing && !busy && apiBase.isNotBlank() && apiKey.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(14.dp),
+            ) {
+                if (probing) {
+                    InlineLoading(size = 14.dp)
+                } else {
+                    Text("测试连接")
+                }
+            }
+
+            probeResult?.let { result ->
+                Spacer(Modifier.height(Spacing.xs))
+                Text(
+                    text = if (result.ok) {
+                        "${result.detail} · ${result.latencyMs} ms"
+                    } else {
+                        result.detail
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (result.ok) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                )
+            }
+
+            Spacer(Modifier.height(Spacing.sm))
 
             Button(
                 onClick = {
