@@ -15,7 +15,9 @@ import androidx.core.content.ContextCompat
 import com.astrmobile.AstrMobileApp
 import com.astrmobile.MainActivity
 import com.astrmobile.R
+import com.astrmobile.core.container.AlertJournal
 import com.astrmobile.core.container.AlertPolicy
+import com.astrmobile.core.container.AlertRecord
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.data.AppSettings
 import com.astrmobile.di.AppContainer
@@ -165,6 +167,18 @@ class ContainerService : Service() {
                 is AlertPolicy.Effect.Raise -> {
                     postedAlerts += effect.key
                     manager.notify(alertId(effect.key), buildAlert(effect))
+
+                    // 落到本地历史：通知弹过就没了，但"我不在的时候掉过几次线"
+                    // 只能靠这个回答。写盘放 IO，别在主线程上蹭一帧。
+                    val record = AlertRecord(
+                        timestamp = System.currentTimeMillis(),
+                        title = effect.title,
+                        detail = effect.body,
+                        critical = effect.critical,
+                    )
+                    scope.launch(Dispatchers.IO) {
+                        AlertJournal.append(filesDir, record)
+                    }
                 }
 
                 is AlertPolicy.Effect.Clear -> {

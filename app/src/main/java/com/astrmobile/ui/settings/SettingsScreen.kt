@@ -56,6 +56,18 @@ import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.runtime.produceState
 import com.astrmobile.core.container.DashboardCredentials
 import com.astrmobile.ui.components.copyText
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.style.TextOverflow
+import com.astrmobile.core.container.AlertJournal
+import com.astrmobile.core.container.AlertRecord
+import com.astrmobile.ui.components.StatusDot
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(
@@ -73,6 +85,16 @@ fun SettingsScreen(
     var githubProxy by remember(settings.githubProxy) { mutableStateOf(settings.githubProxy) }
     var showResetDialog by remember { mutableStateOf(false) }
     var showCredentials by remember { mutableStateOf(false) }
+
+    // 告警历史：通知弹过就没了，这里是留痕
+    var alertRefresh by remember { mutableIntStateOf(0) }
+    var showAllAlerts by remember { mutableStateOf(false) }
+    val alerts by produceState(
+        initialValue = emptyList<AlertRecord>(),
+        key1 = alertRefresh,
+    ) {
+        value = withContext(Dispatchers.IO) { AlertJournal.read(context.filesDir) }
+    }
 
     // 登录信息从首页搬过来的：它属于"要进网页后台时才会用到"的东西，
     // 放在首屏占了一整张卡，却几乎没人天天看。
@@ -226,6 +248,48 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Text("允许后台运行")
+            }
+        }
+
+        Spacer(Modifier.height(Spacing.lg))
+
+        SectionCard(
+            title = "最近异常",
+            subtitle = "掉线、运行失败会记在这里",
+            // 空的时候也传 trailing（内部判断），否则 lambda 的类型推断会丢掉
+            // @Composable 注解，编译期报 "Composable invocations can only happen…"
+            trailing = {
+                if (alerts.isNotEmpty()) {
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                withContext(Dispatchers.IO) { AlertJournal.clear(context.filesDir) }
+                                alertRefresh++
+                            }
+                        },
+                    ) { Text("清空") }
+                }
+            },
+        ) {
+            if (alerts.isEmpty()) {
+                Text(
+                    text = "没有记录。机器人一直正常运行时这里就是空的。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                val shown = if (showAllAlerts) alerts else alerts.take(4)
+                shown.forEach { record ->
+                    AlertRow(record)
+                }
+                if (alerts.size > 4) {
+                    TextButton(onClick = { showAllAlerts = !showAllAlerts }) {
+                        Text(
+                            if (showAllAlerts) "收起" else "查看全部 ${alerts.size} 条",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
             }
         }
 
@@ -436,4 +500,52 @@ private fun requestIgnoreBatteryOptimization(context: Context) {
             context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         }
     }
+}
+
+@Composable
+private fun AlertRow(record: AlertRecord) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.xs),
+        verticalAlignment = Alignment.Top,
+    ) {
+        // 用状态点而不是图标：一行里已经有文字了，再加图标会更挤
+        Box(modifier = Modifier.padding(top = 5.dp)) {
+            StatusDot(
+                color = if (record.critical) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.secondary
+                },
+                size = 7,
+            )
+        }
+        Spacer(Modifier.width(Spacing.sm))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = record.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "${formatAlertTime(record.timestamp)} · ${record.detail}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** 今天的只显示时分，更早的带上日期——列表里绝大多数是最近几小时。 */
+private fun formatAlertTime(millis: Long): String {
+    val target = Calendar.getInstance().apply { timeInMillis = millis }
+    val now = Calendar.getInstance()
+    val sameDay = target.get(Calendar.YEAR) == now.get(Calendar.YEAR) &&
+        target.get(Calendar.DAY_OF_YEAR) == now.get(Calendar.DAY_OF_YEAR)
+
+    val pattern = if (sameDay) "'今天' HH:mm" else "MM-dd HH:mm"
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(millis))
 }
