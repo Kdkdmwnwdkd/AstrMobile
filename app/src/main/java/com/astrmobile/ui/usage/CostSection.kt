@@ -154,6 +154,19 @@ private fun ContextSettingsCard(viewModel: MainViewModel) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            // 这两项不是并列的两个开关：轮数先执行，砍完还超 token 上限才轮到下面这个。
+            // 不写清楚，用户会以为选了「让模型总结」就会自动总结。
+            text = if (currentTurns <= 0) {
+                "不限轮数时，攒到模型的上下文上限才走这一步"
+            } else {
+                "先按轮数砍，砍完仍然超出模型上限，才会走这一步"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 16.sp,
+        )
         Spacer(Modifier.height(Spacing.xs))
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             StrategyChip(
