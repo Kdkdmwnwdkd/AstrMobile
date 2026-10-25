@@ -55,6 +55,9 @@ class RootfsDownloader(
         private const val MAX_REDIRECTS = 5
         private const val BUFFER_SIZE = 128 * 1024
         private const val REPORT_INTERVAL = 512 * 1024L
+
+        /** HttpURLConnection 里没有 416 的常量，只能自己写。 */
+        private const val HTTP_RANGE_NOT_SATISFIABLE = 416
     }
 
     /** 下载完成后的归档。 */
@@ -131,7 +134,7 @@ class RootfsDownloader(
             try {
                 val code = connection.responseCode
 
-                if (code == HttpURLConnection.HTTP_REQUESTED_RANGE_NOT_SATISFIABLE && !resetDone) {
+                if (code == HTTP_RANGE_NOT_SATISFIABLE && !resetDone) {
                     // 半成品比服务器上的文件还大，八成是上次换过包：丢掉从头来
                     partFile.delete()
                     offset = 0L
