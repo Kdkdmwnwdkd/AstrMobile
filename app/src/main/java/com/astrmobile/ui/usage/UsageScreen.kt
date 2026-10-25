@@ -131,6 +131,8 @@ fun UsageScreen(
                     }
                 }
 
+                CostSection(viewModel, snapshot)
+
                 if (snapshot.rangeByUmo.isNotEmpty()) {
                     SectionCard(title = "用在哪", subtitle = "按会话统计") {
                         val total = snapshot.rangeByUmo.sumOf { it.tokens }.coerceAtLeast(1L)

@@ -12,6 +12,8 @@ import com.astrmobile.core.container.BackupResult
 import com.astrmobile.core.container.AstrBotConfigReader
 import com.astrmobile.core.container.Bootstrapper
 import com.astrmobile.core.container.ContainerState
+import com.astrmobile.core.container.ContextConfig
+import com.astrmobile.core.container.ContextSettings
 import com.astrmobile.core.container.CheckItem
 import com.astrmobile.core.container.ConfiguredModel
 import com.astrmobile.core.container.DiagnosticsExporter
@@ -1044,6 +1046,71 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     .onFailure { _behaviorError.value = it.message ?: "保存失败" }
             } finally {
                 _behaviorBusy.value = false
+            }
+        }
+
+    // ---------------------------------------------------------------- 上下文 / 省钱
+
+    private val _contextSettings = MutableStateFlow<ContextSettings?>(null)
+    val contextSettings: StateFlow<ContextSettings?> = _contextSettings.asStateFlow()
+
+    private val _contextBusy = MutableStateFlow(false)
+    val contextBusy: StateFlow<Boolean> = _contextBusy.asStateFlow()
+
+    private val _contextError = MutableStateFlow<String?>(null)
+    val contextError: StateFlow<String?> = _contextError.asStateFlow()
+
+    suspend fun loadContextSettings() {
+        if (_contextBusy.value) return
+        _contextBusy.value = true
+        val cookie = loginAstrBot().getOrElse {
+            _contextError.value = it.message ?: "登录后台失败，容器在运行吗？"
+            _contextBusy.value = false
+            return
+        }
+        AstrBotApi().readSystemConfig(cookie)
+            .onSuccess {
+                _contextSettings.value = ContextConfig.read(it)
+                _contextError.value = null
+            }
+            .onFailure { _contextError.value = it.message ?: "读取配置失败" }
+        _contextBusy.value = false
+    }
+
+    /**
+     * 保存上下文设置。
+     *
+     * 和别处一样先重读整份配置：`PUT /system-config` 是整份替换，
+     * 拿旧副本写回会把用户刚在后台改的模型、插件一起冲掉。
+     */
+    suspend fun saveContextSettings(settings: ContextSettings): Result<String> =
+        withContext(Dispatchers.IO) {
+            val cookie = loginAstrBot().getOrElse { return@withContext Result.failure(it) }
+
+            _contextBusy.value = true
+            try {
+                val config = AstrBotApi().readSystemConfig(cookie).getOrElse {
+                    _contextError.value = it.message ?: "读取配置失败"
+                    return@withContext Result.failure(it)
+                }
+
+                if (!ContextConfig.apply(config, settings)) {
+                    return@withContext Result.success("没有改动")
+                }
+
+                AstrBotApi().writeSystemConfig(cookie, config).fold(
+                    onSuccess = {
+                        _contextSettings.value = settings
+                        _contextError.value = null
+                        Result.success("已保存，下一次回复就按新设置走")
+                    },
+                    onFailure = {
+                        _contextError.value = it.message ?: "保存失败"
+                        Result.failure(it)
+                    },
+                )
+            } finally {
+                _contextBusy.value = false
             }
         }
 
