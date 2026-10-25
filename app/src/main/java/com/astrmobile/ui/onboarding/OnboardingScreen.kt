@@ -93,7 +93,7 @@ fun OnboardingScreen(
         Spacer(Modifier.height(Spacing.xxl))
 
         SectionCard(title = "将要完成的三件事") {
-            StepRow("01", "下载并解压 Ubuntu 系统", "约 100MB，解压后占用约 1.5GB 空间")
+            StepRow("01", "下载并解压 Ubuntu 系统", "约 61MB，解压后占用约 1.5GB 空间")
             StepRow("02", "安装 AstrBot 与 NapCat", "需要联网下载，慢时可切换镜像源")
             StepRow("03", "扫码登录 QQ 并配置模型", "在网页后台完成，App 内一键进入")
         }

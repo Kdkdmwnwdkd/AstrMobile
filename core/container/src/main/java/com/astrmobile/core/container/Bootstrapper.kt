@@ -66,7 +66,7 @@ class Bootstrapper(
                 if (rootfsProvider.hasLocalArchive()) {
                     onStage(Stage.Running("准备系统环境", 0.05f, "本地已有安装包，无需下载"))
                 } else {
-                    onStage(Stage.Running("下载系统环境", 0.05f, "约 100MB，请保持网络通畅"))
+                    onStage(Stage.Running("下载系统环境", 0.05f, "约 61MB，请保持网络通畅"))
                 }
 
                 val archive = rootfsProvider.acquire { progress ->
