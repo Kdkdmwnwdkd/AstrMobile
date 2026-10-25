@@ -8,11 +8,26 @@ import java.io.BufferedReader
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** 一条人格设定。 */
+/**
+ * 一条人格设定。
+ *
+ * [beginDialogs] 是 AstrBot 的「预设对话」：**字符串数组，成对出现**，
+ * 偶数位是用户说的、奇数位是它答的（前端也是按 `index % 2` 分的）。
+ * 它对"像人"的作用往往比 prompt 本身还大——模型会照着示例的语气说话，
+ * 而一句"你说话很幽默"通常只会换来一个四平八稳的回复。
+ */
 data class PersonaItem(
     val id: String,
     val systemPrompt: String,
-)
+    val beginDialogs: List<String> = emptyList(),
+    val customErrorMessage: String? = null,
+) {
+    /** AstrBot 内置的默认人格 id，这个不能被删。 */
+    val isBuiltinDefault: Boolean get() = id == "default"
+
+    /** 示例对话的轮数（一问一答算一轮）。 */
+    val dialogRounds: Int get() = beginDialogs.size / 2
+}
 
 /**
  * AstrBot 后台 API 的最小客户端。
@@ -95,6 +110,9 @@ class AstrBotApi(private val port: Int = 6185) {
                     PersonaItem(
                         id = id,
                         systemPrompt = item.optString("system_prompt"),
+                        beginDialogs = item.optJSONArray("begin_dialogs").toStringList(),
+                        customErrorMessage = item.optString("custom_error_message")
+                            .takeIf { it.isNotBlank() },
                     ),
                 )
             }
@@ -102,16 +120,33 @@ class AstrBotApi(private val port: Int = 6185) {
         Result.success(items)
     }
 
-    /** 已存在就更新，不存在就新建。 */
+    /**
+     * 已存在就更新，不存在就新建。
+     *
+     * 更新走 `PUT /personas/by-id`，服务端用 `exclude_unset` 处理请求体：
+     * **没传的字段保持原样**，所以这里只提交改过的三项，不会把用户配好的
+     * tools / skills 冲掉。
+     */
     suspend fun savePersona(
         cookie: String,
         id: String,
         systemPrompt: String,
+        beginDialogs: List<String> = emptyList(),
+        customErrorMessage: String? = null,
         exists: Boolean,
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        val dialogs = JSONArray()
+        beginDialogs.forEach { dialogs.put(it) }
+
         val body = JSONObject()
             .put("persona_id", id)
             .put("system_prompt", systemPrompt)
+            .put("begin_dialogs", dialogs)
+            .apply {
+                if (!customErrorMessage.isNullOrBlank()) {
+                    put("custom_error_message", customErrorMessage)
+                }
+            }
             .toString()
 
         val (method, path) = if (exists) {
@@ -734,22 +769,45 @@ class AstrBotApi(private val port: Int = 6185) {
      */
     suspend fun providerTokenStats(cookie: String, days: Int = 1): Result<JSONObject> =
         withContext(Dispatchers.IO) {
-            val response = request("GET", "/stats/provider-tokens?days=$days", null, cookie)
-                ?: return@withContext Result.failure(
-                    IllegalStateException("读取用量失败：后台没有响应，容器在运行吗？"),
-                )
+            val path = "/stats/provider-tokens?days=$days"
+            val primary = request("GET", path, null, cookie)
 
-            if (!response.ok) {
-                return@withContext Result.failure(
-                    IllegalStateException(response.message.ifBlank { "读取用量失败" }),
-                )
+            primary?.let { response ->
+                if (response.ok) {
+                    extractStats(response)?.let { return@withContext Result.success(it) }
+                }
             }
 
-            val data = response.data as? JSONObject
-                ?: return@withContext Result.failure(IllegalStateException("用量返回格式异常"))
+            // 老版本 AstrBot 没有 /api/v1/stats，只有 dashboard 的 /api/stat。
+            // 注意这里是单数 stat：v1 的 /stats 和旧版的 /stat 不是同一套路由。
+            // 首页显示不出金额时，用户看到的就是一个永远转圈的 "¥ …"，
+            // 所以这里必须自己回退一次，而不是把 404 当成"没有数据"。
+            val legacy = requestUrl(
+                "GET",
+                "$legacyBase/stat/provider-tokens?days=$days",
+                null,
+                cookie,
+            )
+            if (legacy != null && legacy.ok) {
+                extractStats(legacy)?.let { return@withContext Result.success(it) }
+            }
 
-            Result.success(data)
+            val failure = (legacy ?: primary)?.message.orEmpty()
+            Result.failure(
+                IllegalStateException(
+                    failure.ifBlank { "读取用量失败：后台没有响应，容器在运行吗？" },
+                ),
+            )
         }
+
+    /**
+     * 用量数据可能包在 `data` 里，也可能直接是顶层对象——
+     * 不同版本的 dashboard 对 `ok()` 的处理不一样，两种都认。
+     */
+    private fun extractStats(response: ApiResponse): JSONObject? {
+        (response.data as? JSONObject)?.let { return it }
+        return response.body?.takeIf { it.has("today_total_tokens") }
+    }
     // ---------------------------------------------------------------- 试聊
 
     /**
@@ -1019,6 +1077,17 @@ class AstrBotApi(private val port: Int = 6185) {
             null
         } finally {
             runCatching { connection?.disconnect() }
+        }
+    }
+}
+
+/** 只取字符串元素，跳过 null 与空串：半截的示例对话比没有更糟。 */
+private fun JSONArray?.toStringList(): List<String> {
+    if (this == null) return emptyList()
+    return buildList {
+        for (index in 0 until length()) {
+            val value = optString(index).trim()
+            if (value.isNotEmpty()) add(value)
         }
     }
 }

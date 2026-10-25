@@ -28,34 +28,67 @@ object UsagePricing {
      * 越具体的放前面（`gpt-4o-mini` 必须在 `gpt-4o` 之前）。
      */
     private val TABLE: List<Pair<String, ModelPrice>> = listOf(
-        // DeepSeek
-        "deepseek-reasoner" to ModelPrice(4.0, 16.0),
-        "deepseek-chat" to ModelPrice(2.0, 8.0),
-        "deepseek" to ModelPrice(2.0, 8.0),
-        // OpenAI
-        "gpt-4o-mini" to ModelPrice(1.0, 4.0),
+        // —— OpenAI ——
+        // mini / nano 必须排在正主前面：`gpt-4.1-mini` 会命中 `gpt-4.1`，
+        // 单价差十几倍，一次匹配错就把"今天花了 3 块"算成 40 块。
+        "gpt-5-mini" to ModelPrice(2.0, 8.0),
+        "gpt-5-nano" to ModelPrice(0.5, 2.0),
+        "gpt-5" to ModelPrice(9.0, 72.0),
+        "gpt-4.1-mini" to ModelPrice(3.0, 12.0),
+        "gpt-4.1-nano" to ModelPrice(0.8, 3.2),
         "gpt-4.1" to ModelPrice(14.0, 56.0),
+        "gpt-4o-mini" to ModelPrice(1.0, 4.0),
         "gpt-4o" to ModelPrice(18.0, 72.0),
         "gpt-3.5" to ModelPrice(0.5, 1.5),
+        "o4-mini" to ModelPrice(8.0, 32.0),
+        "o3-mini" to ModelPrice(8.0, 32.0),
+        "o3" to ModelPrice(14.0, 56.0),
         "o1-mini" to ModelPrice(8.0, 32.0),
-        // Anthropic
+        "o1" to ModelPrice(108.0, 432.0),
+
+        // —— Anthropic ——
         "claude-3-5-haiku" to ModelPrice(1.8, 9.0),
+        "claude-haiku" to ModelPrice(1.8, 9.0),
         "claude-3-5-sonnet" to ModelPrice(22.0, 108.0),
+        "claude-sonnet-4" to ModelPrice(22.0, 108.0),
         "claude-sonnet" to ModelPrice(22.0, 108.0),
+        "claude-opus-4" to ModelPrice(108.0, 540.0),
         "claude-opus" to ModelPrice(108.0, 540.0),
-        // 国内
+
+        // —— DeepSeek ——
+        "deepseek-reasoner" to ModelPrice(4.0, 16.0),
+        "deepseek-r1" to ModelPrice(4.0, 16.0),
+        "deepseek-chat" to ModelPrice(2.0, 8.0),
+        "deepseek-v3" to ModelPrice(2.0, 8.0),
+        "deepseek" to ModelPrice(2.0, 8.0),
+
+        // —— Google ——
+        "gemini-2.5-flash" to ModelPrice(1.0, 4.0),
+        "gemini-2.5-pro" to ModelPrice(9.0, 72.0),
+        "gemini-2.0-flash" to ModelPrice(0.5, 2.0),
+        "gemini-1.5-pro" to ModelPrice(9.0, 36.0),
+        "gemini-flash" to ModelPrice(0.5, 2.0),
+        "gemini" to ModelPrice(9.0, 36.0),
+
+        // —— 国内 ——
+        // qwen3 要排在 qwen 前面，否则永远命中兜底价
+        "qwen3" to ModelPrice(2.0, 8.0),
         "qwen-max" to ModelPrice(20.0, 60.0),
         "qwen-plus" to ModelPrice(0.8, 2.0),
+        "qwen-turbo" to ModelPrice(0.3, 0.6),
         "qwen" to ModelPrice(0.8, 2.0),
+        "glm-4.5" to ModelPrice(2.0, 8.0),
         "glm-4" to ModelPrice(1.0, 1.0),
         "glm" to ModelPrice(1.0, 1.0),
+        "kimi-k2" to ModelPrice(4.0, 16.0),
         "moonshot" to ModelPrice(4.0, 16.0),
         "kimi" to ModelPrice(4.0, 16.0),
+        "doubao" to ModelPrice(0.8, 2.0),
+        "hunyuan" to ModelPrice(4.0, 16.0),
+        "minimax" to ModelPrice(1.0, 8.0),
+        "spark" to ModelPrice(0.5, 2.0),
         "ernie" to ModelPrice(0.8, 2.0),
-        // Google
-        "gemini-1.5-pro" to ModelPrice(9.0, 36.0),
-        "gemini-2" to ModelPrice(9.0, 36.0),
-        "gemini-flash" to ModelPrice(0.5, 2.0),
+        "yi-" to ModelPrice(4.0, 16.0),
     )
 
     /** 找不到牌价返回 null——宁可显示"未配置单价"，也不要编一个数出来。 */

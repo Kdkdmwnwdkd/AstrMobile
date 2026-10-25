@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -189,12 +190,33 @@ fun UsageScreen(
                                 )
                                 Spacer(Modifier.width(Spacing.md))
                                 Text(
-                                    text = item.costYuan?.let(UsageSnapshot::formatYuan) ?: "无牌价",
+                                    text = item.costYuan?.let(UsageSnapshot::formatYuan) ?: "未收录",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
+                    }
+                }
+
+                if (snapshot.hasUnpricedModel) {
+                    SectionCard(
+                        title = "这些模型没有牌价",
+                        subtitle = "它们的用量不计入上面的金额",
+                    ) {
+                        snapshot.unpricedModels.take(6).forEach { model ->
+                            Text(
+                                text = "· $model",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                        }
+                        Spacer(Modifier.height(Spacing.sm))
+                        HintText(
+                            "牌价表是内置的，认不出的名字不会瞎猜单价。想让它们算进去，" +
+                                "把这个名字发出来，下一版加进去。",
+                        )
                     }
                 }
 

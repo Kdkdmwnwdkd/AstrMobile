@@ -89,15 +89,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Fetch bundled Ubuntu rootfs
+      # 系统包不再打进 APK：101MB 的 rootfs 会把安装包撑到 105MB，而每个版本
+      # 装的都是同一份系统。这里下载后作为 release 资产单独发布，App 首次启动
+      # 自己下；文件名带校验值前缀，内容一改名字就变，CDN 不会返回旧缓存。
+      - name: Fetch Ubuntu rootfs
         run: |
           set -euo pipefail
-          mkdir -p app/src/main/assets/rootfs
+          mkdir -p dist
+          ASSET="ubuntu-rootfs-91acaa78.tar.xz"
           URL="https://raw.githubusercontent.com/undertaker33/ElymBot/main/app/src/main/assets/runtime/assets/ubuntu-rootfs.tar.xz"
           curl -fL --retry 3 --retry-delay 3 --connect-timeout 20 --max-time 600 \
-            -o app/src/main/assets/rootfs/ubuntu-rootfs.tar.xz "$URL"
-          echo "91acaa786b8e2fbba56a9fd0f8a1188cee482b5c7baeed707b29ddaa9a294daa  app/src/main/assets/rootfs/ubuntu-rootfs.tar.xz" | sha256sum -c -
-          ls -lh app/src/main/assets/rootfs/
+            -o "dist/$ASSET" "$URL"
+          echo "91acaa786b8e2fbba56a9fd0f8a1188cee482b5c7baeed707b29ddaa9a294daa  dist/$ASSET" | sha256sum -c -
+          ls -lh dist/
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
@@ -161,3 +165,20 @@ jobs:
           files: app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
           make_latest: true
+
+      # 只在资产缺失时上传。已发布过的 rootfs 内容不会变（文件名带校验值），
+      # 每次构建都重复上传 100MB 只会白白拖长流水线。
+      - name: Publish rootfs asset
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ASSET="ubuntu-rootfs-91acaa78.tar.xz"
+          if gh release view latest --repo "$GITHUB_REPOSITORY" --json assets \
+               -q '.assets[].name' 2>/dev/null | grep -qx "$ASSET"; then
+            echo "rootfs 资产已存在，跳过上传"
+          else
+            gh release upload latest "dist/$ASSET" --repo "$GITHUB_REPOSITORY"
+            echo "已上传 $ASSET"
+          fi

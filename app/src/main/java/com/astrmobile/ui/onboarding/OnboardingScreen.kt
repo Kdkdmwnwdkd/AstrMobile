@@ -2,6 +2,8 @@ package com.astrmobile.ui.onboarding
 
 import android.content.Context
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -90,7 +93,7 @@ fun OnboardingScreen(
         Spacer(Modifier.height(Spacing.xxl))
 
         SectionCard(title = "将要完成的三件事") {
-            StepRow("01", "搭建 Ubuntu 容器环境", "首次约 10-40 分钟，占用约 1.5GB 空间")
+            StepRow("01", "下载并解压 Ubuntu 系统", "约 100MB，解压后占用约 1.5GB 空间")
             StepRow("02", "安装 AstrBot 与 NapCat", "需要联网下载，慢时可切换镜像源")
             StepRow("03", "扫码登录 QQ 并配置模型", "在网页后台完成，App 内一键进入")
         }
@@ -161,7 +164,7 @@ fun OnboardingScreen(
                     )
                     Spacer(Modifier.height(Spacing.md))
                     Text(
-                        text = "可以重试：已解压的环境不会重复下载，只会继续未完成的步骤。若反复失败，请到「设置」切换镜像源后重试。",
+                        text = "可以重试：已下载的部分会从断点继续，已解压的环境不会重复解压。若反复失败，请换个网络，或用下面的方式导入系统包。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -178,6 +181,7 @@ fun OnboardingScreen(
                 ) {
                     Text("重新安装", fontWeight = FontWeight.SemiBold)
                 }
+                ImportRootfsButton(viewModel)
             }
 
             is Bootstrapper.Stage.Done -> {
@@ -219,6 +223,8 @@ fun OnboardingScreen(
                     Text("开始安装", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
                 Spacer(Modifier.height(Spacing.md))
+                ImportRootfsButton(viewModel)
+                Spacer(Modifier.height(Spacing.sm))
                 Text(
                     text = "仅支持 Android 8.0 及以上的 arm64 设备",
                     style = MaterialTheme.typography.labelSmall,
@@ -244,6 +250,28 @@ fun OnboardingScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun ImportRootfsButton(viewModel: MainViewModel) {
+    // 用一个约束宽松的 MIME：不少文件管理器把 .tar.xz 报成 application/octet-stream，
+    // 按精确类型过滤会让用户在列表里根本看不到自己刚传进来的文件。
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) viewModel.importRootfs(uri) }
+
+    TextButton(
+        onClick = { launcher.launch(arrayOf("*/*")) },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.FileOpen,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(Spacing.sm))
+        Text("从文件导入系统包")
     }
 }
 

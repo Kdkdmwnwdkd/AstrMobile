@@ -92,7 +92,7 @@ https://gh-proxy.com/https://github.com/Kdkdmwnwdkd/AstrMobile/releases/download
 - **arm64-v8a**，仅此一种架构，x86 设备与模拟器不支持
 - Android 8.0（API 26）及以上
 - 至少 6 GB 可用空间（安装后约 3.5 GB）
-- 首次安装需要联网
+- 首次安装需要联网：要单独下载约 100MB 的系统包（安装包本身只有约 14MB）
 
 安装包为 debug 签名，仓库内使用固定 keystore，**可以覆盖升级，不会丢数据**。
 
@@ -100,6 +100,8 @@ https://gh-proxy.com/https://github.com/Kdkdmwnwdkd/AstrMobile/releases/download
 
 1. 安装 APK，允许通知权限
 2. 打开 App →「开始安装」，保持屏幕常亮，等待 10–40 分钟（取决于网络）
+   - 第一步是下载 Ubuntu 系统包（约 100MB）。中途断开不要紧，重试会**从断点继续**
+   - 四个下载源会自动回退；全部失败时可以用「从文件导入」，把电脑上下好的包传到手机再选它
 3. 安装完成后进入控制台 →「启动机器人」，等状态变成「运行中」
 4. 打开「自检」，全绿再往下走；有红项会写明该做什么
 5. 「扫码登录」→ 二维码显示在 App 内 → 手机 QQ 扫码
@@ -163,13 +165,17 @@ https://gh-proxy.com/https://github.com/Kdkdmwnwdkd/AstrMobile/releases/download
 
 - **仅 arm64-v8a**，Android 8.0+。x86 设备与模拟器无法运行（rootfs 与 proot 都是 arm64 的）
 - **后台只能从本机访问**。需要从电脑打开后台时用 `adb forward tcp:6185 tcp:6185`，再访问 `http://127.0.0.1:6185`
-- **首次安装依赖网络**：apt、PyPI、NapCat 与 QQ 安装包，任一环节失败都要重试
+- **首次安装依赖网络**：系统包、apt、PyPI、NapCat 与 QQ 安装包，任一环节失败都要重试
+- **系统包不在 APK 里**：约 100MB，首次启动时下载，存在应用私有目录。卸载 App 会一并删掉，重装要重下
 - **内存占用高**：NapCat 基于 Electron，常驻 1–2 GB，低配机型容易被系统回收
 - **QQ 风控**：非官方协议接入，存在账号受限风险，强烈建议使用小号
 - **debug 签名**：当前只有 debug 包，仅供自用与测试
 - **不支持微信个人号**：AstrBot 已于 2026 年 1 月移除个人微信适配器，本项目不做该方向
 
 ## 常见问题
+
+**「开始安装」卡在下载系统包怎么办？**
+先确认网络能通 GitHub。断点续传是默认行为，把网络换回来再点一次「重新安装」就不会从 0% 开始；四个镜像都试过仍失败时，用「从文件导入」选一个本地 `.tar.xz`（[下载地址](https://github.com/Kdkdmwnwdkd/AstrMobile/releases/download/latest/ubuntu-rootfs-91acaa78.tar.xz)），文件名和大小不用改。
 
 **装完为什么占了 3 GB 多？**
 rootfs 解压约 300 MB，AstrBot 的 Python 环境约 1 GB，NapCat 的 Electron 与 QQ 客户端 1–2 GB。都是运行必需品。

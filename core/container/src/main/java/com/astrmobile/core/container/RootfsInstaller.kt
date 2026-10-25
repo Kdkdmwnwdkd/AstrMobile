@@ -1,6 +1,5 @@
 package com.astrmobile.core.container
 
-import android.content.Context
 import android.system.Os
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,7 +12,10 @@ import java.io.FilterInputStream
 import java.io.InputStream
 
 /**
- * 把内置的 Ubuntu rootfs（tar.xz）解压到私有目录。
+ * 把 Ubuntu rootfs（tar.xz）解压到私有目录。
+ *
+ * 归档从哪儿来由 [RootfsProvider] 决定（APK 内置 / 下载缓存 / 手动导入），
+ * 这里只负责解压本身，不关心来源。
  *
  * 这里不再"猜"顶层目录前缀，原因是一个真实的坑：
  * - Python tarfile 读出的首条目是 `ubuntu-noble-aarch64`（无尾斜杠）
@@ -24,90 +26,85 @@ import java.io.InputStream
  * 作为根，最后 rename 到目标位置（同分区 rename 是 O(1)，不会真的搬 300MB）。
  */
 class RootfsInstaller(
-    private val context: Context,
     private val paths: ContainerPaths,
 ) {
 
     companion object {
-        private const val ASSET_PATH = "rootfs/ubuntu-rootfs.tar.xz"
         private const val MIN_FREE_BYTES = 1200L * 1024 * 1024
     }
 
-    suspend fun install(onProgress: suspend (Float, String) -> Unit): Result<Unit> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                if (paths.isRootfsInstalled()) {
-                    onProgress(1f, "rootfs 已存在")
-                    return@runCatching
-                }
+    suspend fun install(
+        archive: RootfsArchive,
+        onProgress: suspend (Float, String) -> Unit,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            if (paths.isRootfsInstalled()) {
+                onProgress(1f, "rootfs 已存在")
+                return@runCatching
+            }
 
-                val free = paths.filesDir.usableSpace
-                require(free > MIN_FREE_BYTES) {
-                    "存储空间不足：需要至少 ${MIN_FREE_BYTES / 1024 / 1024}MB，当前仅 ${free / 1024 / 1024}MB"
-                }
+            val free = paths.filesDir.usableSpace
+            require(free > MIN_FREE_BYTES) {
+                "存储空间不足：需要至少 ${MIN_FREE_BYTES / 1024 / 1024}MB，当前仅 ${free / 1024 / 1024}MB"
+            }
 
-                val staging = File(paths.runtimeDir, "rootfs-staging")
-                if (staging.exists()) staging.deleteRecursively()
-                staging.mkdirs()
+            val staging = File(paths.runtimeDir, "rootfs-staging")
+            if (staging.exists()) staging.deleteRecursively()
+            staging.mkdirs()
 
-                val totalBytes = runCatching { context.assets.openFd(ASSET_PATH).use { it.length } }
-                    .getOrDefault(0L)
+            val totalBytes = archive.totalBytes
 
-                onProgress(0f, "准备解压 rootfs")
-                val raw = context.assets.open(
-                    ASSET_PATH,
-                    android.content.res.AssetManager.ACCESS_STREAMING,
-                )
-                val counting = CountingInputStream(raw)
+            onProgress(0f, "准备解压 ${archive.label}")
+            val counting = CountingInputStream(archive.open())
 
-                XZInputStream(BufferedInputStream(counting, 64 * 1024)).use { xz ->
-                    TarArchiveInputStream(xz).use { tar ->
-                        var entry: TarArchiveEntry? = tar.nextEntry
-                        var entries = 0
-                        while (entry != null) {
-                            val current = entry
-                            extractEntry(tar, current, staging)
+            XZInputStream(BufferedInputStream(counting, 64 * 1024)).use { xz ->
+                TarArchiveInputStream(xz).use { tar ->
+                    var entry: TarArchiveEntry? = tar.nextEntry
+                    var entries = 0
+                    while (entry != null) {
+                        val current = entry
+                        extractEntry(tar, current, staging)
 
-                            entries++
-                            if (entries % 200 == 0) {
-                                val fraction = if (totalBytes > 0) {
-                                    (counting.count.toFloat() / totalBytes).coerceIn(0f, 0.99f)
-                                } else {
-                                    0f
-                                }
-                                onProgress(fraction * 0.9f, "解压 ${current.name.take(48)}")
+                        entries++
+                        if (entries % 200 == 0) {
+                            val fraction = if (totalBytes > 0) {
+                                (counting.count.toFloat() / totalBytes).coerceIn(0f, 0.99f)
+                            } else {
+                                0f
                             }
-                            entry = tar.nextEntry
+                            onProgress(fraction * 0.9f, "解压 ${current.name.take(48)}")
                         }
+                        entry = tar.nextEntry
                     }
                 }
-
-                onProgress(0.92f, "识别根目录结构")
-                val resolvedRoot = resolveRoot(staging)
-                    ?: error("rootfs 结构异常：找不到 usr/bin/env。顶层内容：" + describeTops(staging))
-
-                onProgress(0.95f, "整理根目录")
-                if (paths.rootfsDir.exists()) paths.rootfsDir.deleteRecursively()
-                paths.rootfsDir.parentFile?.mkdirs()
-
-                val movedByRename = resolvedRoot.renameTo(paths.rootfsDir)
-                if (!movedByRename) {
-                    // 极端情况（跨分区/权限）退化为复制，慢但正确
-                    resolvedRoot.copyRecursively(paths.rootfsDir, overwrite = true)
-                }
-                if (staging.exists()) staging.deleteRecursively()
-
-                check(File(paths.rootfsDir, "usr/bin/env").exists()) {
-                    "rootfs 整理后仍缺少 usr/bin/env，顶层内容：" + describeTops(paths.rootfsDir)
-                }
-                check(File(paths.rootfsDir, "usr/bin/bash").exists()) {
-                    "rootfs 整理后仍缺少 usr/bin/bash，顶层内容：" + describeTops(paths.rootfsDir)
-                }
-
-                paths.markRootfsInstalled()
-                onProgress(1f, "rootfs 解压完成")
             }
+
+            onProgress(0.92f, "识别根目录结构")
+            val resolvedRoot = resolveRoot(staging)
+                ?: error("rootfs 结构异常：找不到 usr/bin/env。顶层内容：" + describeTops(staging))
+
+            onProgress(0.95f, "整理根目录")
+            if (paths.rootfsDir.exists()) paths.rootfsDir.deleteRecursively()
+            paths.rootfsDir.parentFile?.mkdirs()
+
+            val movedByRename = resolvedRoot.renameTo(paths.rootfsDir)
+            if (!movedByRename) {
+                // 极端情况（跨分区/权限）退化为复制，慢但正确
+                resolvedRoot.copyRecursively(paths.rootfsDir, overwrite = true)
+            }
+            if (staging.exists()) staging.deleteRecursively()
+
+            check(File(paths.rootfsDir, "usr/bin/env").exists()) {
+                "rootfs 整理后仍缺少 usr/bin/env，顶层内容：" + describeTops(paths.rootfsDir)
+            }
+            check(File(paths.rootfsDir, "usr/bin/bash").exists()) {
+                "rootfs 整理后仍缺少 usr/bin/bash，顶层内容：" + describeTops(paths.rootfsDir)
+            }
+
+            paths.markRootfsInstalled()
+            onProgress(1f, "rootfs 解压完成")
         }
+    }
 
     /**
      * 找到真正的根：自己就是根，或者唯一一个含 usr/bin/env 的直接子目录。

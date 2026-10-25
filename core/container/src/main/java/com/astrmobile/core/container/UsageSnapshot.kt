@@ -44,10 +44,31 @@ data class UsageSnapshot(
     val rangeByUmo: List<UmoUsage> = emptyList(),
     /** 有模型没匹配到牌价，金额只覆盖了部分用量。 */
     val hasUnpricedModel: Boolean,
+    /** 今日没匹配到牌价的 token 数。 */
+    val unpricedTokens: Long = 0L,
+    /** 没匹配到牌价的模型名，界面上要能指名道姓地说出来。 */
+    val unpricedModels: List<String> = emptyList(),
 ) {
     val todayCostText: String get() = formatYuan(todayCostYuan)
 
     val isFreeOrEmpty: Boolean get() = todayTokens == 0L
+
+    /**
+     * 首屏那一行该显示什么。
+     *
+     * 注意 `未收录` 这个分支：一个月前这里是直接给 ¥0.00 的，结果用户
+     * 用了一个牌价表里没有的中转模型，界面显示「今天花了 0 元」——
+     * 比不显示更糟。没有单价就说没有单价。
+     */
+    val todayCostLabel: String
+        get() = when {
+            todayTokens <= 0L -> "¥ 0.00"
+            pricedTokens <= 0L -> "未收录"
+            else -> formatYuan(todayCostYuan)
+        }
+
+    /** 有牌价的 token 数。 */
+    val pricedTokens: Long get() = (todayTokens - unpricedTokens).coerceAtLeast(0L)
 
     /**
      * 区间（7 天 / 30 天）的估算花费。
@@ -79,6 +100,8 @@ data class UsageSnapshot(
             val todayCalls = data.optInt("today_total_calls", 0)
 
             var unpriced = false
+            var unpricedTokens = 0L
+            val unpricedModels = mutableListOf<String>()
             val models = buildList {
                 val array = data.optJSONArray("today_by_model")
                 if (array != null) {
@@ -87,7 +110,11 @@ data class UsageSnapshot(
                         val name = item.optString("provider_model").ifBlank { "未知模型" }
                         val tokens = item.optLong("tokens", 0L)
                         val cost = UsagePricing.estimateCostYuan(name, tokens)
-                        if (cost == null) unpriced = true
+                        if (cost == null) {
+                            unpriced = true
+                            unpricedTokens += tokens
+                            unpricedModels += name
+                        }
                         add(ModelUsage(model = name, tokens = tokens, costYuan = cost))
                     }
                 }
@@ -136,6 +163,8 @@ data class UsageSnapshot(
                 trend = trend,
                 rangeByUmo = rangeByUmo.sortedByDescending { it.tokens },
                 hasUnpricedModel = unpriced,
+                unpricedTokens = unpricedTokens,
+                unpricedModels = unpricedModels,
             )
         }
     }

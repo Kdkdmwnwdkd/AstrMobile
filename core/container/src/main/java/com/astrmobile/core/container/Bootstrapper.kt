@@ -2,14 +2,16 @@ package com.astrmobile.core.container
 
 import android.content.Context
 import com.astrmobile.core.common.AppLog
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
  * 首次安装编排器。
  *
- * 流程：工具链 → rootfs → 脚本注入 → 容器内 bootstrap（apt / uv / AstrBot / NapCat）。
+ * 流程：工具链 → 系统包（下载/复用本地）→ 解压 → 脚本注入 → 容器内 bootstrap。
  * 全程不做阻塞式桥接：回调本身就是 suspend，取消能正常传播到安装协程。
  */
 class Bootstrapper(
@@ -24,7 +26,8 @@ class Bootstrapper(
         data class Failed(val title: String, val detail: String) : Stage
     }
 
-    private val rootfsInstaller = RootfsInstaller(context, paths)
+    private val rootfsProvider = RootfsProvider(context, paths)
+    private val rootfsInstaller = RootfsInstaller(paths)
     private val binaryInstaller = BinaryInstaller(paths)
 
     @Volatile
@@ -60,9 +63,29 @@ class Bootstrapper(
             }
 
             if (!paths.isRootfsInstalled()) {
-                onStage(Stage.Running("解压系统环境", 0.05f, "首次安装需要 3-8 分钟"))
-                rootfsInstaller.install { fraction, detail ->
-                    onStage(Stage.Running("解压系统环境", 0.05f + fraction * 0.30f, detail))
+                if (rootfsProvider.hasLocalArchive()) {
+                    onStage(Stage.Running("准备系统环境", 0.05f, "本地已有安装包，无需下载"))
+                } else {
+                    onStage(Stage.Running("下载系统环境", 0.05f, "约 100MB，请保持网络通畅"))
+                }
+
+                val archive = rootfsProvider.acquire { progress ->
+                    val fraction = if (progress.fraction >= 0f) progress.fraction else 0f
+                    val detail = buildString {
+                        append(progress.label)
+                        if (progress.attemptCount > 1) {
+                            append("，源 ${progress.attempt}/${progress.attemptCount}")
+                        }
+                        if (progress.resumed) append("，续传中")
+                    }
+                    onStage(
+                        Stage.Running("下载系统环境", 0.05f + fraction * 0.13f, detail),
+                    )
+                }.getOrThrow()
+
+                onStage(Stage.Running("解压系统环境", 0.18f, "首次安装需要 3-8 分钟"))
+                rootfsInstaller.install(archive) { fraction, detail ->
+                    onStage(Stage.Running("解压系统环境", 0.18f + fraction * 0.17f, detail))
                 }.getOrThrow()
             } else {
                 onStage(Stage.Running("解压系统环境", 0.35f, "已存在，跳过"))
@@ -96,9 +119,10 @@ class Bootstrapper(
             onStage(Stage.Done)
             Result.success(Unit)
         } catch (error: Throwable) {
-            if (cancelled) {
+            if (cancelled || error is CancellationException) {
                 AppLog.app("安装已被用户取消")
-                onStage(Stage.Idle)
+                // 协程已取消，普通挂起调用会立刻再次抛出；界面状态必须照常复位
+                withContext(NonCancellable) { onStage(Stage.Idle) }
                 Result.failure(IllegalStateException("已取消安装"))
             } else {
                 AppLog.app("安装失败：${error.message}")
@@ -107,6 +131,15 @@ class Bootstrapper(
             }
         }
     }
+
+    /**
+     * 用本地文件替代下载。
+     *
+     * 给两种情况用：镜像全挂时的兜底（用户从电脑下好、用数据线或网盘传到手机），
+     * 以及内网批量部署。校验不过会直接失败，不会留下一个坏包等下次解压才暴露。
+     */
+    fun adoptImportedRootfs(file: File): Result<Unit> =
+        rootfsProvider.adoptImportedFile(file).map { Unit }
 
     private fun injectScripts() {
         ScriptInjector.inject(context, paths)

@@ -27,6 +27,7 @@ import com.astrmobile.core.container.KnowledgeDocument
 import com.astrmobile.core.container.MarketPlugin
 import com.astrmobile.core.container.ModelConfigRepository
 import com.astrmobile.core.container.PersonaItem
+import com.astrmobile.core.container.PersonaTemplates
 import com.astrmobile.core.container.PluginConfigSnapshot
 import com.astrmobile.core.container.PluginRepository
 import com.astrmobile.core.container.NapCatApi
@@ -34,8 +35,10 @@ import com.astrmobile.core.container.NapCatConfigReader
 import com.astrmobile.core.container.UsageSnapshot
 import com.astrmobile.core.container.VisionApi
 import com.astrmobile.core.data.AppSettings
+import android.net.Uri
 import com.astrmobile.core.data.VisionConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -76,6 +79,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _installLogs = MutableStateFlow<List<String>>(emptyList())
     val installLogs: StateFlow<List<String>> = _installLogs.asStateFlow()
 
+    /** 当前安装协程。取消要连协程一起取消，否则下载循环不会停。 */
+    private var installJob: Job? = null
+
     init {
         refreshEnvironment()
     }
@@ -89,30 +95,79 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_installStage.value is Bootstrapper.Stage.Running) return
         _installLogs.value = emptyList()
         val current = settings.value
-        viewModelScope.launch {
-            bootstrapper.install(
-                onStage = { stage ->
-                    _installStage.value = stage
-                    if (stage is Bootstrapper.Stage.Done) {
-                        _environmentReady.value = true
-                    }
-                },
-                onLine = { line ->
-                    _installLogs.value = (_installLogs.value + line).takeLast(400)
-                    // 同时并入容器日志：安装失败时用户导出的就是这一份完整现场
-                    controller.pushLog(line)
-                },
-                aptMirror = current.aptMirror,
-                pipIndex = current.pipIndex,
-                githubProxy = current.githubProxy,
-            )
-            refreshEnvironment()
+        installJob?.cancel()
+        installJob = viewModelScope.launch {
+            try {
+                bootstrapper.install(
+                    onStage = { stage ->
+                        _installStage.value = stage
+                        if (stage is Bootstrapper.Stage.Done) {
+                            _environmentReady.value = true
+                        }
+                    },
+                    onLine = { line ->
+                        _installLogs.value = (_installLogs.value + line).takeLast(400)
+                        // 同时并入容器日志：安装失败时用户导出的就是这一份完整现场
+                        controller.pushLog(line)
+                    },
+                    aptMirror = current.aptMirror,
+                    pipIndex = current.pipIndex,
+                    githubProxy = current.githubProxy,
+                )
+            } finally {
+                // 取消时也要刷新：用户回到界面能看到"未安装"，而不是卡在进度条上
+                refreshEnvironment()
+            }
         }
     }
 
     fun cancelInstall() {
         bootstrapper.cancel()
+        // 下载阶段没有子进程可杀，只能靠取消协程让读写循环退出；已下载的部分会留着续传
+        installJob?.cancel()
         _installLogs.value = (_installLogs.value + "[APP] 已请求取消安装").takeLast(400)
+    }
+
+    /**
+     * 用本地文件替代下载。
+     *
+     * 系统包 100MB，镜像全挂时用户没法自己解压，只能从电脑传一个过来。
+     * 先把内容拷进缓存，校验通过才算数；校验不过立刻失败，不留坏包。
+     */
+    fun importRootfs(uri: Uri) {
+        viewModelScope.launch {
+            _installStage.value = Bootstrapper.Stage.Running("导入系统包", 0.04f, "正在读取所选文件")
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    val temp = File(appContainer.paths.runtimeDir, "imported-rootfs.tar.xz")
+                    val resolver = getApplication<Application>().contentResolver
+                    resolver.openInputStream(uri)?.use { input ->
+                        temp.outputStream().use { output -> input.copyTo(output) }
+                    } ?: error("无法读取所选文件，请换一个文件管理器重试")
+
+                    check(temp.length() > 0L) { "所选文件是空的" }
+                    _installStage.value = Bootstrapper.Stage.Running(
+                        "导入系统包",
+                        0.05f,
+                        "正在校验（${temp.length() / 1024 / 1024}MB）",
+                    )
+                    bootstrapper.adoptImportedRootfs(temp).getOrThrow()
+                    runCatching { temp.delete() }
+                }
+            }
+            outcome
+                .onSuccess {
+                    _installStage.value = Bootstrapper.Stage.Idle
+                    _installLogs.value = (_installLogs.value + "[APP] 系统包已导入，可以开始安装")
+                        .takeLast(400)
+                }
+                .onFailure { error ->
+                    _installStage.value = Bootstrapper.Stage.Failed(
+                        "导入失败",
+                        error.message ?: "文件不可用",
+                    )
+                }
+        }
     }
 
     fun startContainer() {
@@ -420,27 +475,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         cookie: String,
         id: String,
         prompt: String,
+        beginDialogs: List<String> = emptyList(),
+        customErrorMessage: String? = null,
         exists: Boolean,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val api = AstrBotApi()
-        val saved = api.savePersona(cookie, id, prompt, exists)
+        val dialogs = PersonaTemplates.pairsOf(beginDialogs)
+        val saved = api.savePersona(
+            cookie = cookie,
+            id = id,
+            systemPrompt = prompt,
+            beginDialogs = dialogs,
+            customErrorMessage = customErrorMessage,
+            exists = exists,
+        )
         if (saved.isFailure) return@withContext saved
 
-        val actual = api.listPersonas(cookie).getOrNull()
-            ?.firstOrNull { it.id == id }
-            ?.systemPrompt
-            ?.trim()
-        if (actual != prompt.trim()) {
+        val actual = api.listPersonas(cookie).getOrNull()?.firstOrNull { it.id == id }
+            ?: return@withContext Result.failure(
+                IllegalStateException(
+                    "保存后找不到这条人格（$id）。AstrBot 可能拒绝了这次写入，" +
+                        "去「AstrBot 后台 → 人格」看一眼。",
+                ),
+            )
+
+        if (actual.systemPrompt.trim() != prompt.trim()) {
             return@withContext Result.failure(
                 IllegalStateException(
-                    "保存后读回来的内容对不上（服务端是 ${actual?.length ?: 0} 字，" +
-                        "你提交了 ${prompt.trim().length} 字）。AstrBot 没有接受这次修改，" +
-                        "去「AstrBot 后台 → 人格」看一眼这条是否存在。",
+                    "人设没写进去（服务端是 ${actual.systemPrompt.trim().length} 字，" +
+                        "你提交了 ${prompt.trim().length} 字）。AstrBot 没有接受这次修改。",
+                ),
+            )
+        }
+        // 示例对话条数对不上，说明服务端把 begin_dialogs 忽略了：
+        // 这种情况下人会以为"改好了"，实际语气一点没变
+        if (dialogs.isNotEmpty() && actual.beginDialogs.size != dialogs.size) {
+            return@withContext Result.failure(
+                IllegalStateException(
+                    "人设保存了，但示例对话只写进去 ${actual.beginDialogs.size} 句" +
+                        "（提交了 ${dialogs.size} 句）。AstrBot 的版本可能不支持这一项，" +
+                        "去后台确认后再保存一次。",
                 ),
             )
         }
         Result.success(Unit)
     }
+
+    suspend fun deletePersona(cookie: String, id: String): Result<Unit> =
+        withContext(Dispatchers.IO) { AstrBotApi().deletePersona(cookie, id) }
 
     suspend fun listConversations(
         cookie: String,
@@ -664,9 +746,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * 不设节流等于每切一次页面就发一个请求。
      */
     suspend fun refreshUsage(force: Boolean = false) {
+        // 容器没跑就别发请求了，但必须给一句人话。
+        // 以前这里直接 return，界面会永远停在 "¥ …" —— 用户看到的是
+        // 「点了没反应」，而不是「还没启动」，这才是"用量搞不起来"的来源。
+        // 这一步放在节流之前：状态变化必须立刻反映到界面上。
+        when (containerState.value) {
+            is ContainerState.NotInstalled -> {
+                _usageError.value = "环境还没装好"
+                return
+            }
+
+            is ContainerState.Stopped -> {
+                _usageError.value = "容器没在运行，启动后才有数据"
+                return
+            }
+
+            is ContainerState.Failed -> {
+                _usageError.value = "容器上次启动失败，修好才看得到用量"
+                return
+            }
+
+            else -> Unit
+        }
+
         val now = System.currentTimeMillis()
         if (!force && now - usageFetchedAt < 60_000) return
-        if (containerState.value is ContainerState.NotInstalled) return
 
         val cookie = loginAstrBot().getOrElse {
             _usageError.value = it.message ?: "登录后台失败，容器在运行吗？"

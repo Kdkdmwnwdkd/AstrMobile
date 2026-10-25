@@ -106,10 +106,9 @@ fun DashboardScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // 只在容器跑起来之后才有数据可查；60 秒节流在 ViewModel 里
-    LaunchedEffect(state) {
-        if (state is ContainerState.Running) viewModel.refreshUsage()
-    }
+    // 不论什么状态都问一次：容器没起来时要显示"还没启动"，
+    // 而不是让那一行永远停在 "¥ …"。60 秒节流在 ViewModel 里。
+    LaunchedEffect(state) { viewModel.refreshUsage() }
     val (statusText, tone) = describe(state)
     val statusColor = when (tone) {
         Tone.Ok -> MaterialTheme.colorScheme.primary
@@ -441,7 +440,7 @@ private fun UsageStrip(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable(onClick = onOpen),
+                    .clickable { if (usage == null && error != null) onRefresh() else onOpen() },
                 verticalAlignment = Alignment.Bottom,
             ) {
                 Text(
@@ -455,8 +454,7 @@ private fun UsageStrip(
                     text = when {
                         usage == null && error != null -> "读取失败"
                         usage == null -> "¥ …"
-                        usage.isFreeOrEmpty -> "¥ 0.00"
-                        else -> usage.todayCostText
+                        else -> usage.todayCostLabel
                     },
                     style = MaterialTheme.typography.titleLarge,
                     color = if (usage == null && error != null) {
@@ -469,9 +467,13 @@ private fun UsageStrip(
                 Spacer(Modifier.width(Spacing.sm))
                 Text(
                     text = when {
-                        usage == null && error != null -> error
+                        // 失败时把原因直接摆出来：这一行被截断是常事，所以后面
+                        // 还留了一个"点一下重试"，比让用户猜为什么是 0 强
+                        usage == null && error != null -> "点一下重试"
                         usage == null -> "读取中"
                         usage.isFreeOrEmpty -> "还没有调用记录"
+                        usage.pricedTokens <= 0L && usage.todayTokens > 0L ->
+                            "${formatTokens(usage.todayTokens)} tokens，但模型不在牌价表里"
                         else -> "${formatTokens(usage.todayTokens)} tokens · ${usage.todayCalls} 次"
                     },
                     style = MaterialTheme.typography.bodySmall,

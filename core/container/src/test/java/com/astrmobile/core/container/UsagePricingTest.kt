@@ -155,3 +155,42 @@ class UsageSnapshotTest {
         assertEquals("¥12.35", UsageSnapshot.formatYuan(12.346))
     }
 }
+
+/**
+ * 牌价表的顺序仍然是这张表最脆的地方：新增模型时把 mini 写在正主后面，
+ * 金额会静默放大十几倍，而界面上看不出任何异常。
+ */
+class UsagePricingOrderTest {
+
+    @Test
+    fun `gpt-4_1-mini 不会命中 gpt-4_1`() {
+        val mini = UsagePricing.priceFor("gpt-4.1-mini")!!
+        val full = UsagePricing.priceFor("gpt-4.1")!!
+        assertTrue(mini.inputCnyPerMillion < full.inputCnyPerMillion)
+    }
+
+    @Test
+    fun `gpt-5-mini 不会命中 gpt-5`() {
+        val mini = UsagePricing.priceFor("gpt-5-mini")!!
+        val full = UsagePricing.priceFor("gpt-5")!!
+        assertTrue(mini.outputCnyPerMillion < full.outputCnyPerMillion)
+    }
+
+    @Test
+    fun `qwen3 不会落到 qwen 兜底价`() {
+        val qwen3 = UsagePricing.priceFor("qwen3-max")!!
+        assertEquals(2.0, qwen3.inputCnyPerMillion, 0.001)
+    }
+
+    @Test
+    fun `中转常见前缀不影响匹配`() {
+        // 中转服务常把模型名写成 "openai/gpt-4o-mini" 或 "anthropic/claude-sonnet-4"
+        assertEquals(1.0, UsagePricing.priceFor("openai/gpt-4o-mini")!!.inputCnyPerMillion, 0.001)
+        assertEquals(22.0, UsagePricing.priceFor("anthropic/claude-sonnet-4")!!.inputCnyPerMillion, 0.001)
+    }
+
+    @Test
+    fun `完全不认识的名字返回 null 而不是 0`() {
+        assertNull(UsagePricing.priceFor("some-random-model-v9"))
+    }
+}
