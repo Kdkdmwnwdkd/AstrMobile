@@ -33,7 +33,9 @@ import com.astrmobile.core.container.PersonaItem
 import com.astrmobile.core.container.PersonaTemplates
 import com.astrmobile.core.container.PluginConfigSnapshot
 import com.astrmobile.core.container.PluginDependencyInstaller
+import com.astrmobile.core.container.PluginFootprint
 import com.astrmobile.core.container.PluginRepository
+import com.astrmobile.core.container.ToolFootprint
 import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
 import com.astrmobile.core.container.UsageSnapshot
@@ -1083,6 +1085,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _behaviorBusy.value = false
             }
         }
+
+    // ---------------------------------------------------------------- 工具开销
+
+    private val _toolFootprint = MutableStateFlow<List<PluginFootprint>?>(null)
+    val toolFootprint: StateFlow<List<PluginFootprint>?> = _toolFootprint.asStateFlow()
+
+    private val _toolFootprintError = MutableStateFlow<String?>(null)
+    val toolFootprintError: StateFlow<String?> = _toolFootprintError.asStateFlow()
+
+    private val _toolFootprintBusy = MutableStateFlow(false)
+    val toolFootprintBusy: StateFlow<Boolean> = _toolFootprintBusy.asStateFlow()
+
+    /**
+     * 统计每个插件在每次请求里占掉多少 token。
+     *
+     * 这是唯一能直接回答"我明明没聊几句，钱花哪了"的数据：工具 schema
+     * 是固定开销，装十个插件就是每次几千 token，跟聊没聊无关。
+     */
+    suspend fun loadToolFootprint() {
+        if (_toolFootprintBusy.value) return
+        if (containerState.value !is ContainerState.Running) {
+            _toolFootprintError.value = "容器没在运行，启动后才能统计"
+            return
+        }
+        _toolFootprintBusy.value = true
+        try {
+            val cookie = loginAstrBot().getOrElse {
+                _toolFootprintError.value = it.message ?: "登录后台失败"
+                return
+            }
+            AstrBotApi().listTools(cookie)
+                .onSuccess {
+                    _toolFootprint.value = ToolFootprint.parse(it)
+                    _toolFootprintError.value = null
+                }
+                .onFailure { _toolFootprintError.value = it.message ?: "读取工具列表失败" }
+        } finally {
+            _toolFootprintBusy.value = false
+        }
+    }
 
     // ---------------------------------------------------------------- 上下文 / 省钱
 

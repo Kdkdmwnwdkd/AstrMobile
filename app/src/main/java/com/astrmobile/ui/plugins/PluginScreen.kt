@@ -1,5 +1,6 @@
 package com.astrmobile.ui.plugins
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -44,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,7 +57,10 @@ import com.astrmobile.core.container.FeaturedPlugin
 import com.astrmobile.core.container.FeaturedPlugins
 import com.astrmobile.core.container.InstalledPlugin
 import com.astrmobile.core.container.MarketPlugin
+import com.astrmobile.core.container.PluginFootprint
+import com.astrmobile.core.container.ToolFootprint
 import kotlinx.coroutines.launch
+import java.util.Locale
 import com.astrmobile.core.ui.Spacing
 import com.astrmobile.ui.components.EmptyState
 import com.astrmobile.ui.components.InlineLoading
@@ -192,8 +198,13 @@ fun PluginScreen(
         }
     }
 
+    val footprint by viewModel.toolFootprint.collectAsStateWithLifecycle()
+    val footprintError by viewModel.toolFootprintError.collectAsStateWithLifecycle()
+    val footprintBusy by viewModel.toolFootprintBusy.collectAsStateWithLifecycle()
+
     LaunchedEffect(Unit) {
         refreshInstalled()
+        viewModel.loadToolFootprint()
         viewModel.loadPluginMarket().fold(
             onSuccess = { market = it },
             onFailure = { loadError = it.message ?: "加载失败" },
@@ -386,6 +397,14 @@ fun PluginScreen(
                             }
                         }
                     } else {
+                        item(key = "footprint") {
+                            FootprintSection(
+                                items = footprint,
+                                error = footprintError,
+                                busy = footprintBusy,
+                                onRefresh = { scope.launch { viewModel.loadToolFootprint() } },
+                            )
+                        }
                         if (failed.isNotEmpty()) {
                             item(key = "failed-summary") {
                                 Text(
@@ -929,4 +948,192 @@ private fun BuiltinSection(
             }
         }
     }
+}
+
+/**
+ * 谁在吃 token。
+ *
+ * AstrBot 用 function calling，每次请求都会把所有可用工具的 schema 一起发出去。
+ * 这部分开销和"聊了几句"完全无关——装十个插件，发一句"在吗"也要带几千 token。
+ * 界面上一直看不到这件事，只能靠统计摆出来。
+ */
+@Composable
+private fun FootprintSection(
+    items: List<PluginFootprint>?,
+    error: String?,
+    busy: Boolean,
+    onRefresh: () -> Unit,
+) {
+    SectionLikeCard(
+        title = "谁在吃 token",
+        trailing = {
+            if (busy) {
+                InlineLoading()
+            } else {
+                IconButton(onClick = onRefresh) {
+                    Icon(
+                        Icons.Rounded.Refresh,
+                        contentDescription = "重新统计",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        },
+    ) {
+        when {
+            items == null && error != null -> Text(
+                text = error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp,
+            )
+
+            items == null -> Text(
+                text = "统计中…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            items.isEmpty() -> Text(
+                text = "没有启用任何工具。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            else -> {
+                val totalTokens = ToolFootprint.totalTokens(items)
+                val totalTools = items.sumOf { it.toolCount }
+                // 拿 deepseek-chat 的 3.5 元/百万做参考价，只为了给个量级
+                val dailyYuan = ToolFootprint.dailyWasteYuan(items, pricePerMillion = 3.5, callsPerDay = 100)
+
+                Text(
+                    text = "$totalTools 个工具，每次请求固定带约 ${formatTokens(totalTokens)} token",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = 20.sp,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "这部分跟你聊没聊无关。按每天 100 次调用、3.5 元/百万算，" +
+                        "一天约 ¥${String.format(Locale.US, "%.1f", dailyYuan)} 只是发工具定义。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp,
+                )
+
+                Spacer(Modifier.height(Spacing.sm))
+                val peak = items.first().estimatedTokens.coerceAtLeast(1)
+
+                items.take(8).forEach { item ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = item.displayName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1.6f),
+                        )
+                        Text(
+                            text = "${item.toolCount} 个",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(34.dp),
+                        )
+                        Text(
+                            text = formatTokens(item.estimatedTokens.toLong()),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(52.dp),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(
+                                        (item.estimatedTokens.toFloat() / peak).coerceIn(0.02f, 1f),
+                                    )
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(
+                                        if (item.builtin) {
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                        } else {
+                                            MaterialTheme.colorScheme.primary
+                                        },
+                                    ),
+                            )
+                        }
+                    }
+                }
+
+                if (items.size > 8) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "还有 ${items.size - 8} 个更小的没列出来",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Spacer(Modifier.height(Spacing.sm))
+                Text(
+                    text = "关掉一个用不上的插件，省下的是每一次请求，而不只是那一次。" +
+                        "灰色的是 AstrBot 自带的工具，删不掉但可以在这里关。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp,
+                )
+            }
+        }
+    }
+}
+
+/** 复用 SectionCard 的外观，但不带它默认的内边距层级。 */
+@Composable
+private fun SectionLikeCard(
+    title: String,
+    trailing: @Composable () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.xs),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(Spacing.md)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                trailing()
+            }
+            Spacer(Modifier.height(Spacing.xs))
+            content()
+        }
+    }
+}
+
+
+/** 和用量页同一套写法：上万就换成「万」，否则看不出量级。 */
+private fun formatTokens(tokens: Long): String = when {
+    tokens >= 10_000 -> String.format(Locale.US, "%.1f 万", tokens / 10_000.0)
+    else -> tokens.toString()
 }

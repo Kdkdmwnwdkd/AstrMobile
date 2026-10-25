@@ -801,6 +801,32 @@ class AstrBotApi(private val port: Int = 6185) {
         }
 
     /**
+     * 当前的 LLM 工具清单。
+     *
+     * 返回里每一项都带 `origin_name`（来自哪个插件）、`description` 和
+     * `parameters`（JSON Schema）。这三样就是每次请求都要发给模型的内容，
+     * 也是"什么都没聊却很贵"的主要来源。
+     */
+    suspend fun listTools(cookie: String): Result<JSONArray> = withContext(Dispatchers.IO) {
+        val response = request("GET", "/tools", null, cookie)
+            ?: return@withContext Result.failure(IllegalStateException("读取工具列表失败：无响应"))
+
+        if (!response.ok) {
+            return@withContext Result.failure(
+                IllegalStateException(response.message.ifBlank { "读取工具列表失败" }),
+            )
+        }
+
+        val data = response.data
+        val array = when (data) {
+            is JSONArray -> data
+            is JSONObject -> data.optJSONArray("tools") ?: JSONArray()
+            else -> JSONArray()
+        }
+        Result.success(array)
+    }
+
+    /**
      * 用量数据可能包在 `data` 里，也可能直接是顶层对象——
      * 不同版本的 dashboard 对 `ok()` 的处理不一样，两种都认。
      */
