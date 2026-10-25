@@ -139,6 +139,14 @@ private fun ContextSettingsCard(viewModel: MainViewModel) {
                 )
             }
         }
+        Spacer(Modifier.height(Spacing.xs))
+        Text(
+            text = "一轮 = 你问一句 + 它答一句（中间的调工具也算在内）。" +
+                ContextSettings.turnHint(currentTurns),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 16.sp,
+        )
 
         Spacer(Modifier.height(Spacing.md))
         Text(
@@ -235,7 +243,8 @@ private fun ContextSettingsCard(viewModel: MainViewModel) {
         HintText(
             "AstrBot 默认不限轮数：每次回复都把整段历史重新发给模型，" +
                 "聊得越久单次越贵。限制到 10 轮之后，同样的聊天量通常能降一个数量级。" +
-                "限制的是「记得多久」，不是「能聊多久」——超出部分直接不带上，不会报错。",
+                "限制的是「记得多久」，不是「能聊多久」——超出部分直接不带上，不会报错。" +
+                "群里人多的时候一轮消耗得快，可以适当放宽。",
         )
 
         pluginCount?.let { count ->

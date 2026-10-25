@@ -37,8 +37,24 @@ data class ContextSettings(
         const val STRATEGY_TRUNCATE = "truncate_by_turns"
         const val STRATEGY_LLM_COMPRESS = "llm_compress"
 
-        /** 可选的保留轮数。0 用"不限"，与 AstrBot 的 -1 对应。 */
-        val TURN_OPTIONS: List<Int> = listOf(6, 10, 20, 0)
+        /**
+         * 可选的保留轮数。0 用"不限"，与 AstrBot 的 -1 对应。
+         *
+         * 这里的「一轮」是 AstrBot 的定义：一条用户消息 + 它的回复
+         * （含中间的工具调用），不是"一条消息"。所以 10 轮 = 10 个完整来回。
+         *
+         * 不提供 3/5 这种极端值：设成 3 轮之后它连"刚才说到哪"都接不上，
+         * 用户会以为是模型变笨了，而不是自己把记忆砍了。
+         */
+        val TURN_OPTIONS: List<Int> = listOf(10, 20, 30, 0)
+
+        /** 每档大致覆盖多少内容，帮用户判断"够不够"。 */
+        fun turnHint(turns: Int): String = when {
+            turns <= 0 -> "整段历史都带上，聊越久越贵"
+            turns <= 10 -> "够接住当前话题，跨话题的旧事会忘"
+            turns <= 20 -> "能记住一次完整讨论，日常够用"
+            else -> "长对话友好，单次成本约为 10 轮的两三倍"
+        }
 
         fun turnLabel(turns: Int): String = if (turns <= 0) "不限" else "$turns 轮"
     }
