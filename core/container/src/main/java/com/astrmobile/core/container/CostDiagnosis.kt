@@ -35,8 +35,14 @@ object CostDiagnosis {
     private const val NORMAL_AVG_TOKENS = 1_500L
     private const val HEAVY_AVG_TOKENS = 5_000L
 
-    /** 折算到"每百万 token 多少钱"，用来判断是不是模型本身贵。 */
-    private const val PRICEY_PER_MILLION = 40.0
+    /**
+     * 折算到"每百万 token 多少钱"，用来判断是不是模型本身贵。
+     *
+     * 25 元/百万大致是分水岭：deepseek-chat 3.5、gpt-4o-mini 1.75、
+     * qwen-plus 1.1 都在下面；gpt-4o 31.5、claude-sonnet 43.5、
+     * claude-opus 216 都在上面。同样的聊天量，上下差几十倍。
+     */
+    private const val PRICEY_PER_MILLION = 25.0
 
     fun avgTokensPerCall(snapshot: UsageSnapshot): Long =
         if (snapshot.todayCalls <= 0) 0L else snapshot.todayTokens / snapshot.todayCalls
@@ -56,17 +62,24 @@ object CostDiagnosis {
                 level = LEVEL_BAD,
                 headline = "每次请求平均 ${thousands(avg)} token，上下文在滚雪球",
                 detail = "普通闲聊一轮大约 800–1,500 token。到 ${thousands(avg)} 这个量级，" +
-                    "基本等于「每轮都在重发几十轮历史」——聊得越久，单次越贵，" +
-                    "一天的总量接近平方增长。把「保留最近几轮」设成 10，通常能降一个数量级。",
+                    "要么是「每轮都在重发几十轮历史」，要么是插件和工具太多、每次请求都带着" +
+                    "一大堆定义。先翻一下工具栏和插件列表——如果装了十几个，关掉一半，比改任何" +
+                    "参数都有效。历史的原因则把「保留最近几轮」设成 10。",
             )
         }
 
         if (avg >= NORMAL_AVG_TOKENS) {
+            // 这个区间有两种成因，解法完全相反：一种是历史在累积，另一种是
+            // 压根没聊几句、但每次都要带上工具定义和插件提示词。只说前者，
+            // "明明没聊多少"的人会觉得诊断是瞎编的。
             return CostHint(
                 level = LEVEL_WATCH,
                 headline = "每次请求平均 ${thousands(avg)} token，比正常偏高",
-                detail = "多出来的部分大概率是历史消息：AstrBot 每次请求都会把整个会话" +
-                    "重新发一遍。短对话感觉不到，聊上一整天就很明显。限制到 10 轮可以压住。",
+                detail = "两种可能，看你的聊天记录有多少：\n" +
+                    "· 聊得挺久 → 历史在重复发送，把「保留最近几轮」设成 10\n" +
+                    "· 其实没聊几句 → 多半是工具定义和插件提示词。AstrBot 每次请求都会" +
+                    "把已装插件注册的工具一并发出去，一个工具通常几百 token，装十个就是几千，" +
+                    "跟你聊没聊无关。关掉不用的插件比什么都省。",
             )
         }
 

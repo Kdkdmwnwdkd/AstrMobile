@@ -99,8 +99,13 @@ private fun ContextSettingsCard(viewModel: MainViewModel) {
     var turns by remember { mutableStateOf<Int?>(null) }
     var strategy by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var pluginCount by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(Unit) { viewModel.loadContextSettings() }
+    LaunchedEffect(Unit) {
+        viewModel.loadContextSettings()
+        // 只读本地目录，不联网；拿不到就当不知道，不显示这一行
+        pluginCount = runCatching { viewModel.listInstalledPlugins().size }.getOrNull()
+    }
 
     // 服务端读回来之后才填初值；用户已动过就不覆盖他的选择
     LaunchedEffect(saved) {
@@ -232,6 +237,26 @@ private fun ContextSettingsCard(viewModel: MainViewModel) {
                 "聊得越久单次越贵。限制到 10 轮之后，同样的聊天量通常能降一个数量级。" +
                 "限制的是「记得多久」，不是「能聊多久」——超出部分直接不带上，不会报错。",
         )
+
+        pluginCount?.let { count ->
+            Spacer(Modifier.height(Spacing.sm))
+            Text(
+                text = if (count == 0) {
+                    "没有装第三方插件。如果还是很贵，问题更可能在模型单价上。"
+                } else {
+                    "已装 $count 个第三方插件。每个插件注册的工具都会随每次请求一起发出去，" +
+                        "一个工具通常几百 token——装十个就是几千，跟你聊没聊无关。" +
+                        "这是「没聊几句但很贵」最常见的原因。"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (count >= 5) {
+                    MaterialTheme.colorScheme.secondary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                lineHeight = 16.sp,
+            )
+        }
     }
 }
 
