@@ -11,6 +11,7 @@ import com.astrmobile.core.container.BackupRepository
 import com.astrmobile.core.container.BackupResult
 import com.astrmobile.core.container.AstrBotConfigReader
 import com.astrmobile.core.container.Bootstrapper
+import com.astrmobile.core.container.BuiltinPlugins
 import com.astrmobile.core.container.ContainerState
 import com.astrmobile.core.container.ContextConfig
 import com.astrmobile.core.container.ContextSettings
@@ -448,6 +449,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun uninstallPlugin(dirName: String): Result<Unit> = withContext(Dispatchers.IO) {
         PluginRepository.uninstall(appContainer.paths, dirName)
     }
+
+    /** 内置插件随 APK 走，不用下载。每次启用都会覆盖成当前版本。 */
+    suspend fun installBuiltinPlugin(name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        BuiltinPlugins.install(appContainer.context, appContainer.paths, name)
+    }
+
+    fun isBuiltinPluginInstalled(name: String): Boolean =
+        BuiltinPlugins.isInstalled(appContainer.paths, name)
 
     // ---------------------------------------------------------------- 人格
 

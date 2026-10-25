@@ -114,6 +114,17 @@ def main() -> int:
 
     check_shellcheck(scripts)
 
+    # 内置插件是 Python，语法错误在 CI 里只是一行 log，
+    # 在手机上就是"插件加载失败"，而且原因藏在几千行日志里。
+    plugins_root = ROOT / "app" / "src" / "main" / "assets" / "plugins"
+    plugin_files = sorted(plugins_root.rglob("*.py")) if plugins_root.exists() else []
+    for path in plugin_files:
+        try:
+            ast.parse(path.read_text(encoding="utf-8"))
+            print(f"✓ 插件 {path.relative_to(ROOT)}")
+        except SyntaxError as exc:
+            problems.append(f"{path.relative_to(ROOT)}: 语法错误 第 {exc.lineno} 行 {exc.msg}")
+
     if problems:
         print("\n失败：", file=sys.stderr)
         for item in problems:

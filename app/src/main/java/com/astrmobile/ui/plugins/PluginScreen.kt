@@ -49,7 +49,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.astrmobile.MainViewModel
+import com.astrmobile.core.container.BuiltinPlugins
 import com.astrmobile.core.container.FeaturedPlugin
+import com.astrmobile.core.container.BuiltinPlugins
 import com.astrmobile.core.container.FeaturedPlugins
 import com.astrmobile.core.container.InstalledPlugin
 import com.astrmobile.core.container.MarketPlugin
@@ -90,6 +92,8 @@ fun PluginScreen(
     var limit by remember { mutableIntStateOf(80) }
     var depsInstallingDir by remember { mutableStateOf<String?>(null) }
     var depsLog by remember { mutableStateOf("") }
+    var builtinBusy by remember { mutableStateOf<String?>(null) }
+    var builtinInstalled by remember { mutableStateOf(emptySet<String>()) }
 
     // 装完/删完插件，用户多半直接返回，不会去点"重启"。
     // 离开页面时替他重启，避免"装了但没生效"。连续装多个只会重启一次。
@@ -99,7 +103,15 @@ fun PluginScreen(
         }
     }
 
+    fun refreshBuiltinState() {
+        builtinInstalled = BuiltinPlugins.all
+            .filter { viewModel.isBuiltinPluginInstalled(it.name) }
+            .map { it.name }
+            .toSet()
+    }
+
     fun refreshInstalled() {
+        refreshBuiltinState()
         scope.launch {
             installed = viewModel.listInstalledPlugins()
             // 目录里有，不代表加载成功；失败的要从运行时接口单独问
@@ -127,6 +139,28 @@ fun PluginScreen(
                     isError = true
                     message = error.message ?: "安装失败"
                     needRestart = false
+                },
+            )
+        }
+    }
+
+    fun enableBuiltin(entry: BuiltinPlugins.Entry) {
+        if (builtinBusy != null) return
+        builtinBusy = entry.name
+        message = null
+        scope.launch {
+            val result = viewModel.installBuiltinPlugin(entry.name)
+            builtinBusy = null
+            result.fold(
+                onSuccess = {
+                    isError = false
+                    message = "「${entry.displayName}」已启用"
+                    needRestart = true
+                    refreshInstalled()
+                },
+                onFailure = {
+                    isError = true
+                    message = it.message ?: "启用失败"
                 },
             )
         }
@@ -255,6 +289,7 @@ fun PluginScreen(
         val bannerText = message
         val bannerError = loadError
         when {
+            builtinBusy != null -> Banner("正在写入内置插件…", isError = false)
             depsInstallingDir != null ->
                 Banner("正在装依赖：${depsLog.ifBlank { "准备中…" }}", isError = false)
             installingId != null -> Banner(progressText.ifBlank { "正在安装…" }, isError = false)
@@ -295,6 +330,16 @@ fun PluginScreen(
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     if (tab == 0) {
+                        if (query.isBlank()) {
+                            item(key = "builtin") {
+                                BuiltinSection(
+                                    entries = BuiltinPlugins.all,
+                                    installedNames = builtinInstalled,
+                                    busyName = builtinBusy,
+                                    onEnable = { entry -> enableBuiltin(entry) },
+                                )
+                            }
+                        }
                         if (query.isBlank() && market != null) {
                             item(key = "featured") {
                                 FeaturedSection(
@@ -796,6 +841,91 @@ private fun FeaturedSection(
                             lineHeight = 15.sp,
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 内置插件区。
+ *
+ * 这些跟着 APK 一起走：不用下载、不用担心作者删仓库、版本也不会分叉。
+ * 代价是更新要靠发版，所以只放"逻辑是我们自己定的"那几个。
+ */
+@Composable
+private fun BuiltinSection(
+    entries: List<BuiltinPlugins.Entry>,
+    installedNames: Set<String>,
+    busyName: String?,
+    onEnable: (BuiltinPlugins.Entry) -> Unit,
+) {
+    Column(modifier = Modifier.padding(bottom = Spacing.md)) {
+        Text(
+            text = "内置 · 跟着 App 一起更新",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = "不用下载，点一下就装进容器。",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Spacing.sm))
+
+        entries.forEach { entry ->
+            val ready = installedNames.contains(entry.name)
+            val busy = busyName == entry.name
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = Spacing.sm),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
+                ),
+            ) {
+                Column(modifier = Modifier.padding(Spacing.md)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = entry.displayName,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        when {
+                            busy -> InlineLoading()
+                            ready -> TextButton(onClick = { onEnable(entry) }) {
+                                Text("更新", fontSize = 12.sp)
+                            }
+                            else -> Button(
+                                onClick = { onEnable(entry) },
+                                modifier = Modifier.height(32.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                    horizontal = Spacing.md,
+                                ),
+                            ) {
+                                Text("启用", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = entry.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 18.sp,
+                    )
+                    Spacer(Modifier.height(Spacing.xs))
+                    Text(
+                        text = entry.note,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp,
+                    )
                 }
             }
         }

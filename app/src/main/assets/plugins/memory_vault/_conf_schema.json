@@ -1,0 +1,8 @@
+{
+  "enable_archive": {
+    "description": "存档对话原文",
+    "type": "bool",
+    "default": true,
+    "hint": "按天写进 data/plugin_data/astrbot_plugin_memory_vault/raw/。只写本地文件，不消耗 token。"
+  }
+}

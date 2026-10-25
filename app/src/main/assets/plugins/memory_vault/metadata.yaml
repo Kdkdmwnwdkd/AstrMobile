@@ -1,0 +1,6 @@
+name: astrbot_plugin_memory_vault
+display_name: 记忆库
+desc: 对话全文按天存档、按分类记事实，平时不读，问到了才检索
+version: v1.0.0
+author: AstrMobile
+repo: https://github.com/Kdkdmwnwdkd/AstrMobile
