@@ -51,7 +51,6 @@ import androidx.compose.ui.unit.sp
 import com.astrmobile.MainViewModel
 import com.astrmobile.core.container.BuiltinPlugins
 import com.astrmobile.core.container.FeaturedPlugin
-import com.astrmobile.core.container.BuiltinPlugins
 import com.astrmobile.core.container.FeaturedPlugins
 import com.astrmobile.core.container.InstalledPlugin
 import com.astrmobile.core.container.MarketPlugin
