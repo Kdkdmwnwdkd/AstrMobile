@@ -156,6 +156,9 @@ class MemoryVaultPlugin(Star):
                 return "内容为空，没有记录。"
             name = _safe_category(category)
             path = self.fact_dir / f"{name}.md"
+            if self._already_known(path, text):
+                return f"这条「{name}」里已经有了，没有重复记。"
+
             stamp = datetime.now().strftime("%Y-%m-%d")
             with path.open("a", encoding="utf-8") as fh:
                 fh.write(f"- {stamp} {text}\n")
@@ -175,6 +178,8 @@ class MemoryVaultPlugin(Star):
             category(string): 只查某个分类时填分类名，不确定就留空
         """
         try:
+            if not (query or "").strip():
+                return self._overview()
             hits = self._search(query or "", category or "")
             if not hits:
                 return "记忆库里没有相关内容。"
@@ -187,6 +192,65 @@ class MemoryVaultPlugin(Star):
             return f"检索失败：{exc}"
 
     # ------------------------------------------------------------ 检索
+
+    @staticmethod
+    def _already_known(path: Path, text: str) -> bool:
+        """同样的句子别记第二遍。
+
+        Mem0 用一次额外的 LLM 调用来做 ADD/UPDATE/NOOP 判定，那在手机上
+        太贵。这里退一步：只看字面重复。改口（「我现在不吃辣了」）识别不了，
+        但至少不会把同一句话存成五条，检索时把上下文占满。
+        """
+        if not path.exists():
+            return False
+        try:
+            target = _grams(text)
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if not line.startswith("- "):
+                    continue
+                body = line[2:]
+                # 去掉日期前缀再比
+                body = body[11:] if len(body) > 11 and body[4] == "-" else body
+                if body.strip() == text:
+                    return True
+                grams = _grams(body)
+                if target and grams:
+                    overlap = len(target & grams) / max(len(target), 1)
+                    if overlap >= 0.9:
+                        return True
+        except Exception:  # noqa: BLE001
+            return False
+        return False
+
+    def _overview(self) -> str:
+        """没给关键词时，告诉模型库里有哪些分类、各多少条。
+
+        Letta 的做法是把「记忆统计」常驻在上下文里，让模型知道自己有什么。
+        那要一直占 token，这里改成按需问一次。
+        """
+        rows: list[str] = []
+        total = 0
+        for path in sorted(self.fact_dir.glob("*.md")):
+            try:
+                lines = [
+                    line
+                    for line in path.read_text(encoding="utf-8").splitlines()
+                    if line.startswith("- ")
+                ]
+            except Exception:  # noqa: BLE001
+                continue
+            if not lines:
+                continue
+            total += len(lines)
+            rows.append(f"- {path.stem}：{len(lines)} 条")
+
+        raw_files = list(self.raw_dir.glob("*.md"))
+        if not rows and not raw_files:
+            return "记忆库还是空的，还没有记下任何东西。"
+
+        head = f"共 {total} 条事实，分类如下：" if rows else "还没有分类事实。"
+        tail = f"另有 {len(raw_files)} 天的对话原文可查。"
+        return "\n".join([head, *rows, tail])
 
     def _search(self, query: str, category: str) -> list[str]:
         target = _grams(query)
@@ -245,6 +309,20 @@ class MemoryVaultPlugin(Star):
 
     @staticmethod
     def _score(target: set[str], text: str) -> float:
+        """2-gram 为主，单字兜底。
+
+        只做 2-gram 会漏得很干脆：问「我喜欢吃什么」时 query 切成
+        「喜欢/欢吃/吃什/什么」，而记的是「爱吃火锅」，一个都不重合。
+        单字兜底虽然糙，但它保证了「吃」这个字还能把两边连起来。
+        """
         if not text:
             return 0.0
-        return len(target & _grams(text)) / len(target)
+        grams = _grams(text)
+        hit = len(target & grams)
+        if hit == 0:
+            # 退化成单字：权重压到 1/3，避免「我」「的」这种字把无关内容顶上来
+            chars = set(re.sub(r"\s+", "", text))
+            query_chars = set("".join(target))
+            common = len(chars & query_chars)
+            return (common / max(len(query_chars), 1)) * 0.33
+        return hit / len(target)
