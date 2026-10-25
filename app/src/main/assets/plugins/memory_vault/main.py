@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -37,6 +38,15 @@ MAX_RECALL_CHARS = 2000
 RAW_SEARCH_DAYS = 14
 
 _CATEGORY_SAFE = re.compile(r"[^\w\u4e00-\u9fff-]")
+
+
+def _one_line(value: object, limit: int = 500) -> str:
+    """把任意文本压成一行。
+
+    换行不是排版问题：每行以 "- " 开头，一段带换行的内容会伪造出
+    第二条记录。模型被诱导时也可能"顺手"写进来的东西。
+    """
+    return " ".join(str(value or "").split())[:limit]
 
 
 def _strip_keywords(body: str) -> str:
@@ -74,8 +84,11 @@ def _grams(text: str) -> set[str]:
 
     比"分字"准：单字「吃」会命中「吃亏」，而「爱吃」不会。
     也没引 jieba——少一个依赖，手机上就少一个装不上的理由。
+
+    截前 2000 字：一条转发的长文能到几万字，全量切 gram 会在检索时
+    把内存和 CPU 打满，而检索是没有超时保护的。
     """
-    text = re.sub(r"\s+", "", text.lower())
+    text = re.sub(r"\s+", "", text.lower())[:2000]
     if len(text) <= 2:
         return {text} if text else set()
     return {text[i : i + 2] for i in range(len(text) - 1)}
@@ -98,6 +111,9 @@ class MemoryVaultPlugin(Star):
         self.fact_dir.mkdir(parents=True, exist_ok=True)
         # 同一个事件可能触发多次 LLM 请求（工具循环），只记一次
         self._logged: set[str] = set()
+        # 多个群同时说话时，append 会并发写同一个文件。
+        # O_APPEND 本身够稳，但一次写被拆成多次 syscall 时仍会交错。
+        self._io_lock = threading.Lock()
 
     # ------------------------------------------------------------ 存档
 
@@ -142,8 +158,9 @@ class MemoryVaultPlugin(Star):
                 f"- 助手：{reply_text}\n"
             )
             path = self.raw_dir / f"{now.strftime('%Y-%m-%d')}.md"
-            with path.open("a", encoding="utf-8") as fh:
-                fh.write(line)
+            with self._io_lock:
+                with path.open("a", encoding="utf-8") as fh:
+                    fh.write(line)
         except Exception as exc:  # noqa: BLE001
             # 存档失败绝不能影响正常回复
             logger.debug(f"[memory_vault] 存档失败：{exc}")
@@ -158,8 +175,12 @@ class MemoryVaultPlugin(Star):
         """
         if self.cfg.get("enable_nightly", True) is False:
             return
-        self._task = asyncio.create_task(self._nightly_loop())
-        logger.info("[memory_vault] 夜间整理已启用")
+        try:
+            self._task = asyncio.create_task(self._nightly_loop())
+            logger.info("[memory_vault] 夜间整理已启用")
+        except Exception as exc:  # noqa: BLE001
+            # 后台任务起不来不该连累插件加载：手动 remember/recall 仍然可用
+            logger.warning(f"[memory_vault] 夜间整理启动失败：{exc}")
 
     async def terminate(self) -> None:
         task = getattr(self, "_task", None)
@@ -241,12 +262,10 @@ class MemoryVaultPlugin(Star):
         """
         op = str(item.get("op", "add") or "add").lower()
         name = _safe_category(item.get("category", ""))
-        content = str(item.get("content", "") or "").strip()
-        target = str(item.get("target", "") or "").strip()
+        content = _one_line(item.get("content"))
+        target = _one_line(item.get("target"))
         keywords = [
-            str(k).strip()
-            for k in (item.get("keywords") or [])
-            if str(k).strip()
+            _one_line(k, 16) for k in (item.get("keywords") or []) if _one_line(k, 16)
         ][:6]
         path = self.fact_dir / f"{name}.md"
 
@@ -264,8 +283,9 @@ class MemoryVaultPlugin(Star):
 
         stamp = datetime.now().strftime("%Y-%m-%d")
         suffix = "".join(f" #{k}" for k in keywords)
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(f"- {stamp} {content}{suffix}\n")
+        with self._io_lock:
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(f"- {stamp} {content}{suffix}\n")
         return True
 
     def _replace_line(
@@ -345,8 +365,10 @@ class MemoryVaultPlugin(Star):
 
     def _save_state(self, state: dict) -> None:
         try:
-            self._state_path().write_text(
-                json.dumps(state, ensure_ascii=False), encoding="utf-8"
+            # 原子写。这份文件丢了，offsets 全归零，所有历史会被重新抽取一遍——
+            # 花钱是次要的，重复条目会立刻把分类文件塞满。
+            _write_atomic(
+                self._state_path(), json.dumps(state, ensure_ascii=False)
             )
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"[memory_vault] 状态写入失败：{exc}")
@@ -465,7 +487,7 @@ class MemoryVaultPlugin(Star):
             content(string): 一句话写清楚的事，带上必要的限定，例如「喜欢吃辣，但不吃香菜」
         """
         try:
-            text = (content or "").strip()
+            text = _one_line(content)
             if not text:
                 return "内容为空，没有记录。"
             name = _safe_category(category)

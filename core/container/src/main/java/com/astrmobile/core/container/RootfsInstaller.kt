@@ -127,9 +127,10 @@ class RootfsInstaller(
         if (name.isBlank()) return
 
         val target = File(root, name)
-        val rootPath = root.canonicalPath
-        val targetPath = runCatching { target.canonicalPath }.getOrElse { return }
-        if (!targetPath.startsWith(rootPath)) return
+        // 按分隔符判断，不能用字符串前缀：根是 /a/b 时 /a/bc 也会被放过。
+        // canonicalPath 会解析已存在的符号链接，所以 tar 里先塞一个指向外部的
+        // 软链、再往里写文件的套路也会在这里被拦下。
+        if (!PathSafety.isInside(root, target)) return
 
         when {
             entry.isDirectory -> {

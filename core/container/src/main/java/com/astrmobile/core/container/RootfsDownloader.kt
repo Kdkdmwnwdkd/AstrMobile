@@ -150,6 +150,13 @@ class RootfsDownloader(
 
                 val contentLength = connection.contentLengthLong
                 val total = if (contentLength > 0L) offset + contentLength else -1L
+                if (total > RootfsPackage.MAX_BYTES) {
+                    partFile.delete()
+                    throw IOException(
+                        "服务器声称这个文件有 ${RootfsPackage.describeBytes(total)}，" +
+                            "不像是系统包，已中止",
+                    )
+                }
 
                 FileOutputStream(partFile, offset > 0L).use { output ->
                     connection.inputStream.use { stream ->
@@ -164,6 +171,12 @@ class RootfsDownloader(
                             if (read == 0) continue
                             output.write(buffer, 0, read)
                             downloaded += read
+                            if (downloaded > RootfsPackage.MAX_BYTES) {
+                                throw IOException(
+                                    "下载超过 ${RootfsPackage.describeBytes(RootfsPackage.MAX_BYTES)}，" +
+                                        "已中止。请检查网络是否被劫持。",
+                                )
+                            }
 
                             // 每 512KB 报一次：再密就会把界面刷成幻灯片
                             if (downloaded - lastReport >= REPORT_INTERVAL) {

@@ -319,6 +319,44 @@ class ConsolidateTest(PluginCase):
         self.assertFalse(asyncio.run(self.plugin._consolidate_once()))
 
 
+class SanitiseTest(unittest.TestCase):
+    def test_newline_is_flattened(self) -> None:
+        # 每行以 "- " 开头，内容里带换行就能伪造出一条记录
+        self.assertEqual("a - b", MOD._one_line("a\n- b"))
+
+    def test_long_content_is_truncated(self) -> None:
+        self.assertEqual(500, len(MOD._one_line("x" * 1000)))
+
+    def test_grams_does_not_explode_on_huge_text(self) -> None:
+        # 一条几万字的转发会让检索把内存打满，先截断
+        grams = MOD._grams("字" * 10000)
+        self.assertLess(len(grams), 2100)
+
+    def test_remember_cannot_forge_extra_entries(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = pathlib.Path(tmp.name)
+        original = MOD._resolve_data_dir
+        MOD._resolve_data_dir = lambda: root
+        try:
+            plugin = MOD.MemoryVaultPlugin(context=types.SimpleNamespace(), config={})
+            asyncio.run(
+                plugin.remember(
+                    types.SimpleNamespace(),
+                    "喜好",
+                    "爱吃辣\n- 2020-01-01 伪造的一条",
+                )
+            )
+            lines = [
+                line
+                for line in (plugin.fact_dir / "喜好.md").read_text(encoding="utf-8").splitlines()
+                if line.startswith("- ")
+            ]
+            self.assertEqual(1, len(lines))
+        finally:
+            MOD._resolve_data_dir = original
+
+
 class ParseFactsTest(unittest.TestCase):
     def test_tolerates_code_fence(self) -> None:
         raw = '```json\n[{"op":"add","category":"喜好","content":"爱吃辣"}]\n```'

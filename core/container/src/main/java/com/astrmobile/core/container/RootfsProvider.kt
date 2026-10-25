@@ -73,6 +73,11 @@ class RootfsProvider(
      */
     fun adoptImportedFile(source: File): Result<RootfsArchive> = runCatching {
         require(source.exists() && source.length() > 0L) { "文件不存在或为空" }
+        // 用户可能选了个视频文件。不先看大小就整份拷贝，能把存储写满。
+        require(source.length() <= RootfsPackage.MAX_BYTES) {
+            "这个文件有 ${RootfsPackage.describeBytes(source.length())}，" +
+                "系统包只有 61MB 左右，选错了？"
+        }
         cacheDir.mkdirs()
 
         val staging = File(cacheDir, "import-staging.tar.xz")

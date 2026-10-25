@@ -23,6 +23,8 @@ private class RangeHttpServer(
     private val supportsRange: Boolean = true,
     private val statusOverride: Int? = null,
     val honouredRequests: MutableList<String?> = mutableListOf(),
+    /** 伪造响应头里的 Content-Length，用来模拟镜像声称一个巨大的文件。 */
+    private val declaredSize: Long? = null,
 ) {
     private val socket = ServerSocket(0)
     private val worker = Thread {
@@ -86,9 +88,10 @@ private class RangeHttpServer(
             )
             output.write(slice)
         } else {
+            val declared = declaredSize ?: body.size.toLong()
             output.write(
                 ("HTTP/1.1 200 OK\r\n" +
-                    "Content-Length: ${body.size}\r\n" +
+                    "Content-Length: $declared\r\n" +
                     "Connection: close\r\n\r\n").toByteArray(),
             )
             output.write(body)
@@ -247,6 +250,29 @@ class RootfsDownloaderTest {
         val message = result.exceptionOrNull()?.message.orEmpty()
         assertTrue(message.contains("下载失败"))
         assertTrue(message.contains("从文件导入"))
+    }
+
+    @Test
+    fun `服务器声称超大文件时立即中止`() = runBlocking {
+        // 镜像抽风把整个仓库打进响应里时，不能一路写到把手机存储占满
+        val body = ByteArray(1024) { 5 }
+        val server = RangeHttpServer(
+            body,
+            declaredSize = 500L * 1024 * 1024,
+        ).apply { start() }
+        try {
+            val dir = tempDir()
+            val result = downloaderFor(
+                dir,
+                listOf("http://127.0.0.1:${server.port}/x"),
+                sha256Of(body),
+            ).ensure()
+
+            assertTrue(result.isFailure)
+            assertFalse(File(dir, "test.tar.xz.part").exists())
+        } finally {
+            server.stop()
+        }
     }
 
     @Test

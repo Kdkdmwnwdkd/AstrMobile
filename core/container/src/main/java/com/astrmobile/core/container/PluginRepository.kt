@@ -271,7 +271,6 @@ object PluginRepository {
     private fun unzip(zip: File, destination: File) {
         ZipInputStream(BufferedInputStream(zip.inputStream())).use { stream ->
             var entry = stream.nextEntry
-            val rootPath = destination.canonicalPath
             var entries = 0
             var total = 0L
             while (entry != null) {
@@ -280,8 +279,7 @@ object PluginRepository {
                 val name = entry.name
                 if (name.isNotBlank()) {
                     val outFile = File(destination, name)
-                    // 防路径穿越：压缩包里的 ../ 不能跳出目标目录。
-                    if (!outFile.canonicalPath.startsWith(rootPath)) {
+                    if (!PathSafety.isInside(destination, outFile)) {
                         entry = stream.nextEntry
                         continue
                     }
