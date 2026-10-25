@@ -106,11 +106,11 @@ class PersonaTemplatesTest {
             }
         """.trimIndent()
 
-        // 走一遍与 AstrBotApi 相同的解析路径：取 data 层再逐项读
-        val root = org.json.JSONObject(json).optJSONObject("data")!!
+        // 走一遍与 AstrBotApi 相同的解析路径：取 data 层（数组）再逐项读
+        val root = org.json.JSONObject(json).optJSONArray("data")!!
         val item = root.optJSONObject(0)!!
         val dialogs = item.optJSONArray("begin_dialogs")!!
-        assertEquals(2, dialogs.length())
+        assertTrue(dialogs.length() == 2)
         assertEquals("冰箱里有剩饭", dialogs.optString(1))
         assertEquals("我先静静", item.optString("custom_error_message"))
     }

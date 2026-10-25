@@ -69,7 +69,7 @@ class RootfsPackageTest {
             origin = "https://github.com/a/x.tar.xz",
             fallback = "https://github.com/a/x.tar.xz",
         )
-        assertEquals(1, urls.size)
+        assertTrue(urls.size == 1)
     }
 
     @Test

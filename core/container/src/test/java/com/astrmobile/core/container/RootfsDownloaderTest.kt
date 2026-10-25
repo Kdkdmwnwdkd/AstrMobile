@@ -22,7 +22,7 @@ private class RangeHttpServer(
     private val body: ByteArray,
     private val supportsRange: Boolean = true,
     private val statusOverride: Int? = null,
-    private val honouredRequests: MutableList<String?> = mutableListOf(),
+    val honouredRequests: MutableList<String?> = mutableListOf(),
 ) {
     private val socket = ServerSocket(0)
     private val worker = Thread {
