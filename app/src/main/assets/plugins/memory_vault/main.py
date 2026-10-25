@@ -39,6 +39,16 @@ RAW_SEARCH_DAYS = 14
 _CATEGORY_SAFE = re.compile(r"[^\w\u4e00-\u9fff-]")
 
 
+def _strip_keywords(body: str) -> str:
+    """去掉行尾的 #关键词，只留正文。"""
+    return body.split(" #")[0].strip()
+
+
+def _keywords_of(body: str) -> list[str]:
+    parts = body.split(" #")
+    return [part.strip() for part in parts[1:] if part.strip()] if len(parts) > 1 else []
+
+
 def _resolve_data_dir() -> Path:
     """优先用 AstrBot 的数据目录，拿不到就退到插件自己的目录。
 
@@ -211,22 +221,95 @@ class MemoryVaultPlugin(Star):
             # 今天不再试。否则每 5 分钟重试一次，一天能白烧几百次调用。
             return False
 
-        written = 0
+        changed = 0
         for item in facts:
-            name = _safe_category(item.get("category", ""))
-            content = str(item.get("content", "")).strip()
-            if not content:
-                continue
-            path = self.fact_dir / f"{name}.md"
-            if self._already_known(path, content):
-                continue
-            stamp = datetime.now().strftime("%Y-%m-%d")
-            with path.open("a", encoding="utf-8") as fh:
-                fh.write(f"- {stamp} {content}\n")
-            written += 1
+            if self._apply_fact(item):
+                changed += 1
 
         self._set_offset(target, _offset_after(lines, offset, len(chunk)))
-        logger.info(f"[memory_vault] 夜间整理：读 {len(chunk)} 行，新增 {written} 条")
+        logger.info(f"[memory_vault] 夜间整理：读 {len(chunk)} 行，更新 {changed} 条")
+        return True
+
+    def _apply_fact(self, item: dict) -> bool:
+        """按 op 执行一条抽取结果。
+
+        模型给 update/delete 时，target 必须能在库里按字面找到才执行；
+        找不到就退化成 add。宁可多留一条旧说法，也不能凭一句相似就删掉
+        用户的东西——删错了没有任何地方能看出来。
+        """
+        op = str(item.get("op", "add") or "add").lower()
+        name = _safe_category(item.get("category", ""))
+        content = str(item.get("content", "") or "").strip()
+        target = str(item.get("target", "") or "").strip()
+        keywords = [
+            str(k).strip()
+            for k in (item.get("keywords") or [])
+            if str(k).strip()
+        ][:6]
+        path = self.fact_dir / f"{name}.md"
+
+        if op in ("update", "delete") and target:
+            if self._replace_line(path, target, content if op == "update" else "", keywords):
+                return True
+            if op == "delete":
+                # 删不掉就算了，不要退化成"用空内容新增"
+                return False
+
+        if not content:
+            return False
+        if self._already_known(path, content):
+            return False
+
+        stamp = datetime.now().strftime("%Y-%m-%d")
+        suffix = "".join(f" #{k}" for k in keywords)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(f"- {stamp} {content}{suffix}\n")
+        return True
+
+    def _replace_line(
+        self, path: Path, target: str, new_content: str, keywords: list[str]
+    ) -> bool:
+        """把库里最像 target 的那条替换或删除。
+
+        用 2-gram 重合度而不是精确相等：模型转述旧内容时几乎不可能逐字复制，
+        精确匹配会让 update/delete 永远失败。
+        """
+        if not path.exists():
+            return False
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except Exception:  # noqa: BLE001
+            return False
+
+        want = _grams(target)
+        if not want:
+            return False
+
+        best = -1
+        best_score = 0.0
+        for index, line in enumerate(lines):
+            if not line.startswith("- "):
+                continue
+            body = _strip_keywords(line[2:])
+            body = body[11:] if len(body) > 11 and body[4:5] == "-" else body
+            grams = _grams(body)
+            if not grams:
+                continue
+            score = len(want & grams) / max(len(want), 1)
+            if score > best_score:
+                best_score = score
+                best = index
+
+        if best < 0 or best_score < 0.7:
+            return False
+
+        if new_content:
+            stamp = datetime.now().strftime("%Y-%m-%d")
+            suffix = "".join(f" #{k}" for k in keywords)
+            lines[best] = f"- {stamp} {new_content}{suffix}"
+        else:
+            del lines[best]
+        _write_atomic(path, "\n".join(lines) + "\n")
         return True
 
     def _next_pending_file(self) -> Path | None:
@@ -279,26 +362,39 @@ class MemoryVaultPlugin(Star):
 
         # 单行截断：一条转发的长文能把整个 prompt 撑爆
         text = "\n".join(lines)[-12000:]
+        existing = self._existing_context()
+        payload = f"<existing>\n{existing}\n</existing>\n\n<new>\n{text}\n</new>"
 
         system = (
-            "你是一个记忆整理器。从聊天记录里抽取关于用户的**长期事实**。\n"
+            "你是一个记忆整理器。你会看到两部分：<existing> 是已经记住的，"
+            "<new> 是新的聊天记录。\n"
+            "任务：从 <new> 里抽取关于用户的长期事实，并和 <existing> 比对后决定怎么处理。\n\n"
             "只抽稳定的、以后还会被问到的：偏好、习惯、作息、人际关系、正在做的事、明确的决定。\n"
-            "不要抽寒暄、临时情绪、一次性的问题与回答。\n"
-            "输出严格的 JSON 数组，不要任何解释文字。每项两个字段：\n"
-            '{"category": "喜好", "content": "喜欢吃辣，但不吃香菜"}\n'
-            "category 用简短中文名词，同一个意思始终用同一个词（统一用「喜好」，不要写成「爱好」「偏好」）。\n"
-            "content 写成脱离上下文也能读懂的一句完整的话。\n"
+            "不要抽寒暄、临时情绪、一次性的问答。\n\n"
+            "输出严格的 JSON 数组，不要任何解释文字。每项字段：\n"
+            '{"op": "add", "category": "喜好", "content": "喜欢吃辣，但不吃香菜", '
+            '"keywords": ["辣", "口味", "香菜"], "target": ""}\n\n'
+            "op 三种取值：\n"
+            "- add：新事实\n"
+            "- update：用户改口了（例如以前说不吃辣，现在开始吃）。content 写新的说法，"
+            "target 填 <existing> 里那条旧内容的原文\n"
+            "- delete：旧事实已经不成立了，但没有新说法。target 填旧内容原文，content 留空\n\n"
+            "target 必须从 <existing> 里逐字复制，一个字都不能改。不确定就一律用 add。\n"
+            "category 用简短中文名词，同一个意思始终用同一个词（统一用「喜好」，"
+            "不要写成「爱好」「偏好」）。\n"
+            "keywords 是 2–5 个用户可能用来提问的词，写同义词和口语说法，"
+            "让「口味重不重」也能找到「爱吃辣」。\n"
             "没有可抽的就输出 []。"
         )
 
         try:
             try:
                 resp = await provider.text_chat(
-                    prompt=text, context=[], system_prompt=system
+                    prompt=payload, context=[], system_prompt=system
                 )
             except TypeError:
                 resp = await provider.text_chat(
-                    prompt=text, contexts=[], system_prompt=system
+                    prompt=payload, contexts=[], system_prompt=system
                 )
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"[memory_vault] 调用模型失败：{exc}")
@@ -306,6 +402,31 @@ class MemoryVaultPlugin(Star):
 
         raw = getattr(resp, "completion_text", "") or ""
         return _parse_facts(raw)
+
+    def _existing_context(self, limit: int = 80) -> str:
+        """把现有事实摊平成文本喂给模型，供它判断新增还是改口。
+
+        只取每类最近 20 条、总共 80 条：再多会挤掉真正的输入内容，
+        而且越老的条目越不可能被改口。
+        """
+        rows: list[str] = []
+        for path in sorted(self.fact_dir.glob("*.md")):
+            try:
+                lines = [
+                    line
+                    for line in path.read_text(encoding="utf-8").splitlines()
+                    if line.startswith("- ")
+                ]
+            except Exception:  # noqa: BLE001
+                continue
+            for line in lines[-20:]:
+                body = _strip_keywords(line[2:])
+                body = body[11:] if len(body) > 11 and body[4:5] == "-" else body
+                if body.strip():
+                    rows.append(f"[{path.stem}] {body.strip()}")
+        if not rows:
+            return "（还没有任何记忆）"
+        return "\n".join(rows[-limit:])
 
     async def _get_provider(self):
         """拿当前使用的模型。不同版本接口不一样，逐级退。"""
@@ -399,9 +520,9 @@ class MemoryVaultPlugin(Star):
             for line in path.read_text(encoding="utf-8").splitlines():
                 if not line.startswith("- "):
                     continue
-                body = line[2:]
+                body = _strip_keywords(line[2:])
                 # 去掉日期前缀再比
-                body = body[11:] if len(body) > 11 and body[4] == "-" else body
+                body = body[11:] if len(body) > 11 and body[4:5] == "-" else body
                 if body.strip() == text:
                     return True
                 grams = _grams(body)
@@ -463,9 +584,15 @@ class MemoryVaultPlugin(Star):
                 if not line.startswith("- "):
                     continue
                 body = line[2:]
-                score = self._score(target, body)
+                plain = _strip_keywords(body)
+                # 关键词是夜间整理时让模型顺手写的同义说法：
+                # 问「口味重不重」时，正文里没有「口味」两个字，靠它命中
+                kws = _keywords_of(body)
+                score = self._score(target, plain)
+                if kws:
+                    score = max(score, self._score(target, " ".join(kws)) * 0.9)
                 if score > 0:
-                    scored.append((score + 1.0, f"[{path.stem}] {body}"))
+                    scored.append((score + 1.0, f"[{path.stem}] {plain}"))
 
         # 原文兜底：只在最近几天里找，且权重更低
         cutoff = time.time() - RAW_SEARCH_DAYS * 86400
@@ -544,7 +671,10 @@ def _parse_facts(raw: str) -> list[dict] | None:
 
     result: list[dict] = []
     for item in data:
-        if isinstance(item, dict) and item.get("content"):
+        if not isinstance(item, dict):
+            continue
+        # delete 项只有 target 没有 content，按 content 过滤会把删除请求全吃掉
+        if item.get("content") or item.get("target"):
             result.append(item)
     return result
 
@@ -561,3 +691,14 @@ def _offset_after(lines: list[str], start: int, consumed: int) -> int:
             if count >= consumed:
                 return index + 1
     return len(lines)
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """先写临时文件再改名。
+
+    整理过程中被系统杀掉时，直接覆写会留下半截文件——分类事实丢一半，
+    而且没有任何报错。rename 在同一分区上是原子的。
+    """
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
