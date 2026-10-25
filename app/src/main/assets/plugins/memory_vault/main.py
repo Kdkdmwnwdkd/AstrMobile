@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import re
 import time
 from datetime import datetime
@@ -135,6 +137,195 @@ class MemoryVaultPlugin(Star):
         except Exception as exc:  # noqa: BLE001
             # 存档失败绝不能影响正常回复
             logger.debug(f"[memory_vault] 存档失败：{exc}")
+
+    # ------------------------------------------------------------ 夜间整理
+
+    async def initialize(self) -> None:
+        """启动后台整理任务。
+
+        白天只在存档，一个字都不抽——抽取要调模型，摊到每一轮就是每轮多一次
+        请求。放到凌晨批量做，一天只花一次，而且这时候没人聊天，失败了也不影响谁。
+        """
+        if self.cfg.get("enable_nightly", True) is False:
+            return
+        self._task = asyncio.create_task(self._nightly_loop())
+        logger.info("[memory_vault] 夜间整理已启用")
+
+    async def terminate(self) -> None:
+        task = getattr(self, "_task", None)
+        if task:
+            task.cancel()
+
+    async def _nightly_loop(self) -> None:
+        while True:
+            try:
+                await asyncio.sleep(300)
+                if not self._due():
+                    continue
+                # 积压时一口气追几个文件，但设上限：手机上一轮跑太久会被系统掐掉
+                for _ in range(5):
+                    if not await self._consolidate_once():
+                        break
+                self._mark_ran()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                # 这里绝不能抛出去：后台任务一旦死掉，之后就再也不整理了，
+                # 而且没有任何提示。
+                logger.warning(f"[memory_vault] 夜间整理异常：{exc}")
+
+    def _due(self) -> bool:
+        hour = int(self.cfg.get("run_at_hour", 3) or 3)
+        now = datetime.now()
+        if now.hour < hour:
+            return False
+        state = self._load_state()
+        return state.get("last_run") != now.strftime("%Y-%m-%d")
+
+    async def _consolidate_once(self) -> bool:
+        """处理一个文件。返回是否还有待处理的文件。
+
+        一次只吃一个文件（一天一个），处理完精确推进到"读到的最后一行"。
+        之前那版按整文件标记，结果是一天里没读完的部分被永久跳过——
+        这种错在界面上完全看不出来，只是"它好像忘了点东西"。
+        """
+        max_lines = int(self.cfg.get("max_lines_per_run", 200) or 200)
+        target = self._next_pending_file()
+        if target is None:
+            return False
+
+        try:
+            lines = target.read_text(encoding="utf-8").splitlines()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"[memory_vault] 读不到 {target.name}：{exc}")
+            return False
+
+        offset = self._offset_of(target)
+        chunk = [line for line in lines[offset:] if line.strip()][:max_lines]
+        if not chunk:
+            self._set_offset(target, len(lines))
+            return True
+
+        facts = await self._extract(chunk)
+        if facts is None:
+            # 今天不再试。否则每 5 分钟重试一次，一天能白烧几百次调用。
+            return False
+
+        written = 0
+        for item in facts:
+            name = _safe_category(item.get("category", ""))
+            content = str(item.get("content", "")).strip()
+            if not content:
+                continue
+            path = self.fact_dir / f"{name}.md"
+            if self._already_known(path, content):
+                continue
+            stamp = datetime.now().strftime("%Y-%m-%d")
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(f"- {stamp} {content}\n")
+            written += 1
+
+        self._set_offset(target, _offset_after(lines, offset, len(chunk)))
+        logger.info(f"[memory_vault] 夜间整理：读 {len(chunk)} 行，新增 {written} 条")
+        return True
+
+    def _next_pending_file(self) -> Path | None:
+        today = datetime.now().strftime("%Y-%m-%d")
+        for path in sorted(self.raw_dir.glob("*.md")):
+            # 当天的文件还在长，读了也是半截
+            if path.stem >= today:
+                continue
+            if self._offset_of(path) < len(
+                path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+            ):
+                return path
+        return None
+
+    def _offset_of(self, path: Path) -> int:
+        return int(self._load_state().get("offsets", {}).get(path.name, 0))
+
+    def _set_offset(self, path: Path, value: int) -> None:
+        state = self._load_state()
+        state.setdefault("offsets", {})[path.name] = value
+        self._save_state(state)
+
+    def _state_path(self) -> Path:
+        return self.root / "state.json"
+
+    def _load_state(self) -> dict:
+        try:
+            return json.loads(self._state_path().read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def _save_state(self, state: dict) -> None:
+        try:
+            self._state_path().write_text(
+                json.dumps(state, ensure_ascii=False), encoding="utf-8"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"[memory_vault] 状态写入失败：{exc}")
+
+    def _mark_ran(self) -> None:
+        state = self._load_state()
+        state["last_run"] = datetime.now().strftime("%Y-%m-%d")
+        self._save_state(state)
+
+    async def _extract(self, lines: list[str]) -> list[dict] | None:
+        provider = await self._get_provider()
+        if provider is None:
+            logger.debug("[memory_vault] 没有可用的模型，跳过整理")
+            return None
+
+        # 单行截断：一条转发的长文能把整个 prompt 撑爆
+        text = "\n".join(lines)[-12000:]
+
+        system = (
+            "你是一个记忆整理器。从聊天记录里抽取关于用户的**长期事实**。\n"
+            "只抽稳定的、以后还会被问到的：偏好、习惯、作息、人际关系、正在做的事、明确的决定。\n"
+            "不要抽寒暄、临时情绪、一次性的问题与回答。\n"
+            "输出严格的 JSON 数组，不要任何解释文字。每项两个字段：\n"
+            '{"category": "喜好", "content": "喜欢吃辣，但不吃香菜"}\n'
+            "category 用简短中文名词，同一个意思始终用同一个词（统一用「喜好」，不要写成「爱好」「偏好」）。\n"
+            "content 写成脱离上下文也能读懂的一句完整的话。\n"
+            "没有可抽的就输出 []。"
+        )
+
+        try:
+            try:
+                resp = await provider.text_chat(
+                    prompt=text, context=[], system_prompt=system
+                )
+            except TypeError:
+                resp = await provider.text_chat(
+                    prompt=text, contexts=[], system_prompt=system
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[memory_vault] 调用模型失败：{exc}")
+            return None
+
+        raw = getattr(resp, "completion_text", "") or ""
+        return _parse_facts(raw)
+
+    async def _get_provider(self):
+        """拿当前使用的模型。不同版本接口不一样，逐级退。"""
+        try:
+            prov = await self.context.get_using_provider_async()
+            if prov:
+                return prov
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            prov = self.context.get_using_provider()
+            if prov:
+                return prov
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            providers = self.context.get_all_providers()
+            return providers[0] if providers else None
+        except Exception:  # noqa: BLE001
+            return None
 
     # ------------------------------------------------------------ 工具
 
@@ -326,3 +517,47 @@ class MemoryVaultPlugin(Star):
             common = len(chars & query_chars)
             return (common / max(len(query_chars), 1)) * 0.33
         return hit / len(target)
+
+
+def _parse_facts(raw: str) -> list[dict] | None:
+    """从模型输出里抠出 JSON 数组。
+
+    模型经常在 JSON 外面包一层 ```json 或者加一句"好的，以下是"，
+    直接 json.loads 会失败。这里只找第一组方括号，并逐个校验元素形状。
+    """
+    if not raw:
+        return None
+    text = raw.strip()
+    text = re.sub(r"^```(?:json)?", "", text).strip()
+    text = re.sub(r"```$", "", text).strip()
+
+    start = text.find("[")
+    end = text.rfind("]")
+    if start < 0 or end <= start:
+        return None
+    try:
+        data = json.loads(text[start : end + 1])
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(data, list):
+        return None
+
+    result: list[dict] = []
+    for item in data:
+        if isinstance(item, dict) and item.get("content"):
+            result.append(item)
+    return result
+
+
+def _offset_after(lines: list[str], start: int, consumed: int) -> int:
+    """给定"从 start 行开始读了 consumed 条非空行"，返回新的起始行号。
+
+    空行不参与计数，但必须被跨过去，否则下次会重复读到同一条。
+    """
+    count = 0
+    for index in range(start, len(lines)):
+        if lines[index].strip():
+            count += 1
+            if count >= consumed:
+                return index + 1
+    return len(lines)

@@ -4,5 +4,23 @@
     "type": "bool",
     "default": true,
     "hint": "按天写进 data/plugin_data/astrbot_plugin_memory_vault/raw/。只写本地文件，不消耗 token。"
+  },
+  "enable_nightly": {
+    "description": "夜间自动整理",
+    "type": "bool",
+    "default": true,
+    "hint": "每天在设定的时间把前一天的对话归纳成分类事实。一天只调一次模型，大约几分钱。"
+  },
+  "run_at_hour": {
+    "description": "整理时间（几点）",
+    "type": "int",
+    "default": 3,
+    "hint": "24 小时制，0-23。默认凌晨 3 点，这时候没人聊天。"
+  },
+  "max_lines_per_run": {
+    "description": "每次最多读多少行",
+    "type": "int",
+    "default": 200,
+    "hint": "控制单次整理的 token 开销。对话多的时候可以调大，但成本和耗时会跟着涨。"
   }
 }
