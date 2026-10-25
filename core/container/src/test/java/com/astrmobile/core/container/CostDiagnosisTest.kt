@@ -64,8 +64,9 @@ class CostDiagnosisTest {
 
     @Test
     fun `模型没有牌价时要说明白而不是判正常`() {
+        // 平均 1000 token，上下文本身正常；只有这样才会走到"单价/未收录"这一档
         val hint = CostDiagnosis.analyze(
-            snapshot(120_000, 8, cost = 0.0, unpriced = 120_000).copy(
+            snapshot(8_000, 8, cost = 0.0, unpriced = 8_000).copy(
                 unpricedModels = listOf("mystery-proxy-v1"),
             ),
         )!!
