@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.astrmobile.MainViewModel
 import com.astrmobile.core.container.BuiltinPlugins
 import com.astrmobile.core.container.FeaturedPlugin
@@ -1007,7 +1008,7 @@ private fun FootprintSection(
                 val dailyYuan = ToolFootprint.dailyWasteYuan(items, pricePerMillion = 3.5, callsPerDay = 100)
 
                 Text(
-                    text = "$totalTools 个工具，每次请求固定带约 ${formatTokens(totalTokens)} token",
+                    text = "$totalTools 个工具，每次请求固定带约 ${formatTokens(totalTokens.toLong())} token",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = 20.sp,
