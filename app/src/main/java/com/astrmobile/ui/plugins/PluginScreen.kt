@@ -49,6 +49,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.astrmobile.MainViewModel
+import com.astrmobile.core.container.FeaturedPlugin
+import com.astrmobile.core.container.FeaturedPlugins
 import com.astrmobile.core.container.InstalledPlugin
 import com.astrmobile.core.container.MarketPlugin
 import kotlinx.coroutines.launch
@@ -86,6 +88,8 @@ fun PluginScreen(
     var needRestart by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<MarketPlugin?>(null) }
     var limit by remember { mutableIntStateOf(80) }
+    var depsInstallingDir by remember { mutableStateOf<String?>(null) }
+    var depsLog by remember { mutableStateOf("") }
 
     // 装完/删完插件，用户多半直接返回，不会去点"重启"。
     // 离开页面时替他重启，避免"装了但没生效"。连续装多个只会重启一次。
@@ -122,6 +126,33 @@ fun PluginScreen(
                 onFailure = { error ->
                     isError = true
                     message = error.message ?: "安装失败"
+                    needRestart = false
+                },
+            )
+        }
+    }
+
+    fun startInstallDeps(item: FeaturedPlugin) {
+        if (depsInstallingDir != null) return
+        val dir = FeaturedPlugins.dirNameOf(item.repo)
+        depsInstallingDir = dir
+        depsLog = "准备安装依赖…"
+        message = null
+        scope.launch {
+            val result = viewModel.installPluginDependencies(dir) { line ->
+                depsLog = line
+            }
+            depsInstallingDir = null
+            result.fold(
+                onSuccess = {
+                    isError = false
+                    message = "${item.displayName} 的依赖装好了"
+                    needRestart = true
+                },
+                onFailure = { error ->
+                    isError = true
+                    // 失败时把最后一行 pip 输出留在消息里，比只说"失败了"有用
+                    message = error.message ?: depsLog.takeLast(120).ifBlank { "装依赖失败" }
                     needRestart = false
                 },
             )
@@ -224,6 +255,8 @@ fun PluginScreen(
         val bannerText = message
         val bannerError = loadError
         when {
+            depsInstallingDir != null ->
+                Banner("正在装依赖：${depsLog.ifBlank { "准备中…" }}", isError = false)
             installingId != null -> Banner(progressText.ifBlank { "正在安装…" }, isError = false)
             bannerText != null -> Banner(
                 bannerText,
@@ -262,6 +295,31 @@ fun PluginScreen(
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     if (tab == 0) {
+                        if (query.isBlank() && market != null) {
+                            item(key = "featured") {
+                                FeaturedSection(
+                                    installed = installed,
+                                    installingId = installingId,
+                                    depsInstallingDir = depsInstallingDir,
+                                    hasRequirements = { dir -> viewModel.pluginHasRequirements(dir) },
+                                    onInstall = { item ->
+                                        startInstall(
+                                            MarketPlugin(
+                                                id = item.repo,
+                                                displayName = item.displayName,
+                                                description = item.summary,
+                                                author = item.repo.substringBefore('/'),
+                                                repo = "https://github.com/${item.repo}",
+                                                tags = emptyList(),
+                                                stars = 0,
+                                                version = "",
+                                            ),
+                                        )
+                                    },
+                                    onInstallDeps = { item -> startInstallDeps(item) },
+                                )
+                            }
+                        }
                         items(filtered, key = { it.id }) { plugin ->
                             val alreadyInstalled = installed.any { it.dirName == repoDir(plugin.repo) }
                             MarketRow(
@@ -605,4 +663,141 @@ private fun failureFor(dirName: String, failed: Map<String, String>): String? {
             key.contains(dirName, ignoreCase = true) ||
             dirName.contains(key, ignoreCase = true)
     }?.value?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * 精选区。
+ *
+ * 存在的理由：市场里搜「记忆」出来十几个，描述一个比一个能吹，
+ * 但它们大多要 Milvus、PostgreSQL 或者云端 embedding —— 在手机上
+ * 装上去就是加载失败。这里只放确认能跑的，并且把代价写在卡片上。
+ */
+@Composable
+private fun FeaturedSection(
+    installed: List<InstalledPlugin>,
+    installingId: String?,
+    depsInstallingDir: String?,
+    hasRequirements: (String) -> Boolean,
+    onInstall: (FeaturedPlugin) -> Unit,
+    onInstallDeps: (FeaturedPlugin) -> Unit,
+) {
+    Column(modifier = Modifier.padding(bottom = Spacing.md)) {
+        Text(
+            text = "精选 · 能在手机上跑",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = "这几个避开了外部数据库和云端依赖。装之前先看最后一行——它们都会让账单变高。",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 16.sp,
+        )
+        Spacer(Modifier.height(Spacing.sm))
+
+        FeaturedPlugins.all.forEach { item ->
+            val dirName = FeaturedPlugins.dirNameOf(item.repo)
+            val isInstalled = installed.any { it.dirName == dirName }
+            val needsDepsNow = isInstalled && item.needsDeps && hasRequirements(dirName)
+            val installing = installingId == item.repo
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = Spacing.sm),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                ),
+            ) {
+                Column(modifier = Modifier.padding(Spacing.md)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = item.displayName,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        when {
+                            installing -> InlineLoading()
+                            isInstalled -> Text(
+                                text = "已安装",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            else -> Button(
+                                onClick = { onInstall(item) },
+                                modifier = Modifier.height(32.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                    horizontal = Spacing.md,
+                                ),
+                            ) {
+                                Text("安装", fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = item.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 18.sp,
+                    )
+                    Spacer(Modifier.height(Spacing.xs))
+                    Text(
+                        text = item.note,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp,
+                    )
+
+                    item.prerequisite?.let { pre ->
+                        Spacer(Modifier.height(Spacing.xs))
+                        Text(
+                            text = "前置：$pre",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            lineHeight = 16.sp,
+                        )
+                    }
+
+                    Spacer(Modifier.height(Spacing.xs))
+                    Text(
+                        text = "成本：${item.costNote}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        lineHeight = 16.sp,
+                    )
+
+                    if (needsDepsNow) {
+                        Spacer(Modifier.height(Spacing.sm))
+                        OutlinedButton(
+                            onClick = { onInstallDeps(item) },
+                            enabled = depsInstallingDir == null,
+                            modifier = Modifier.height(34.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                horizontal = Spacing.md,
+                            ),
+                        ) {
+                            Text(
+                                text = if (depsInstallingDir == dirName) "正在装…" else "装 Python 依赖",
+                                fontSize = 12.sp,
+                            )
+                        }
+                        Spacer(Modifier.height(Spacing.xs))
+                        Text(
+                            text = "插件安装只解压、不装依赖。缺依赖时它就加载不起来，日志里只会说「缺少模块」。",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 15.sp,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

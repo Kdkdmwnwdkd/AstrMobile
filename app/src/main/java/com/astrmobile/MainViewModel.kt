@@ -31,6 +31,7 @@ import com.astrmobile.core.container.ModelConfigRepository
 import com.astrmobile.core.container.PersonaItem
 import com.astrmobile.core.container.PersonaTemplates
 import com.astrmobile.core.container.PluginConfigSnapshot
+import com.astrmobile.core.container.PluginDependencyInstaller
 import com.astrmobile.core.container.PluginRepository
 import com.astrmobile.core.container.NapCatApi
 import com.astrmobile.core.container.NapCatConfigReader
@@ -399,6 +400,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun listInstalledPlugins(): List<InstalledPlugin> = withContext(Dispatchers.IO) {
         runCatching { PluginRepository.listInstalled(appContainer.paths) }.getOrDefault(emptyList())
+    }
+
+    private val dependencyInstaller by lazy {
+        PluginDependencyInstaller(appContainer.paths)
+    }
+
+    /** 这个插件有没有 requirements.txt。同步读本地文件，够快，不用协程。 */
+    fun pluginHasRequirements(dirName: String): Boolean =
+        dependencyInstaller.hasRequirements(dirName)
+
+    /**
+     * 在容器里给它装 Python 依赖。
+     *
+     * 插件安装只解压、不 pip install，缺依赖时 AstrBot 只会说"缺少模块 xxx"，
+     * 用户对不上是哪个插件。所以把这一步做成显式动作，输出全部回显。
+     */
+    suspend fun installPluginDependencies(
+        dirName: String,
+        onLine: suspend (String) -> Unit,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        dependencyInstaller.install(
+            dirName = dirName,
+            pipIndex = settings.value.pipIndex,
+            onLine = onLine,
+        )
     }
 
     /**
