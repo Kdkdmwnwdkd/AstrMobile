@@ -83,6 +83,19 @@ object CostDiagnosis {
             )
         }
 
+        // 没牌价时金额恒为 0，如果不管，就会被判成"一切正常"。
+        // 用户看到的是 ¥0.00，以为没花钱——比不显示更糟。
+        if (snapshot.pricedTokens <= 0L && snapshot.todayTokens > 0L) {
+            val model = snapshot.unpricedModels.firstOrNull() ?: "未知模型"
+            return CostHint(
+                level = LEVEL_WATCH,
+                headline = "这个模型没有牌价，金额算不出来",
+                detail = "今天用了 ${thousands(snapshot.todayTokens)} token（${snapshot.todayCalls} 次），" +
+                    "但「$model」不在内置牌价表里。不是没花钱，是没法折算。" +
+                    "真实用量以厂商后台为准。",
+            )
+        }
+
         if (price >= PRICEY_PER_MILLION) {
             return CostHint(
                 level = LEVEL_WATCH,

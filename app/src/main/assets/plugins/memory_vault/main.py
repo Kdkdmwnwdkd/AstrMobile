@@ -219,6 +219,7 @@ class MemoryVaultPlugin(Star):
         facts = await self._extract(chunk)
         if facts is None:
             # 今天不再试。否则每 5 分钟重试一次，一天能白烧几百次调用。
+            # 进度不推进，明天会从同一段重来。
             return False
 
         changed = 0
@@ -228,7 +229,8 @@ class MemoryVaultPlugin(Star):
 
         self._set_offset(target, _offset_after(lines, offset, len(chunk)))
         logger.info(f"[memory_vault] 夜间整理：读 {len(chunk)} 行，更新 {changed} 条")
-        return True
+        # 返回值统一表示"还有没有下一个待处理文件"，不要用"处理成功"来顶替
+        return self._next_pending_file() is not None
 
     def _apply_fact(self, item: dict) -> bool:
         """按 op 执行一条抽取结果。

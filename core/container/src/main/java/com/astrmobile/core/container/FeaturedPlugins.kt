@@ -72,7 +72,16 @@ object FeaturedPlugins {
     /** `owner/repo` 里的仓库名，也就是插件装好后的目录名。 */
     fun dirNameOf(repo: String): String = repo.substringAfterLast('/').substringBefore(".git")
 
-    /** 插件名里只允许这些字符：它会被拼进容器内的命令。 */
-    fun isSafeDirName(name: String): Boolean =
-        name.isNotBlank() && name.length <= 100 && name.matches(Regex("[A-Za-z0-9._-]+"))
+    /**
+     * 插件名里只允许这些字符：它会被拼进容器内的命令。
+     *
+     * 光靠字符白名单不够——`.` 本身在白名单里，所以 `..` 和 `.hidden`
+     * 也能匹配上。`..` 拼进路径就是上跳到插件目录外面。
+     */
+    fun isSafeDirName(name: String): Boolean {
+        if (name.isBlank() || name.length > 100) return false
+        if (name.startsWith(".")) return false
+        if (name.contains("..")) return false
+        return name.matches(Regex("[A-Za-z0-9._-]+"))
+    }
 }

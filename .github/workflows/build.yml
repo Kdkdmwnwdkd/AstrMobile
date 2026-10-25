@@ -33,6 +33,11 @@ jobs:
       - name: Check container scripts
         run: python3 tools/check_scripts.py
 
+      # 内置插件是 Python，语法检查之外还要过一遍行为测试：
+      # 改口识别、检索、进度推进这些错了都不会抛异常，只会"好像忘了点东西"
+      - name: Test memory vault plugin
+        run: python3 tools/test_memory_vault.py
+
       # 版本号和更新日志对不上不会让构建失败，但会让人看发布页时迷惑
       - name: Check release metadata
         run: python3 tools/check_version.py

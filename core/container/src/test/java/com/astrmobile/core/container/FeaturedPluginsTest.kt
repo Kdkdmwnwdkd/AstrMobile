@@ -78,6 +78,16 @@ class FeaturedPluginsTest {
     }
 
     @Test
+    fun `上跳目录被拒绝`() {
+        // `.` 本身在字符白名单里，所以 ".." 能通过正则匹配。
+        // 拼进路径就是上跳到插件目录外面，必须单独挡。
+        assertFalse(FeaturedPlugins.isSafeDirName(".."))
+        assertFalse(FeaturedPlugins.isSafeDirName("."))
+        assertFalse(FeaturedPlugins.isSafeDirName("a..b"))
+        assertFalse(FeaturedPlugins.isSafeDirName(".hidden"))
+    }
+
+    @Test
     fun `正常的目录名通过`() {
         assertTrue(FeaturedPlugins.isSafeDirName("astrbot_plugin_memorix"))
         assertTrue(FeaturedPlugins.isSafeDirName("plugin-name.v2"))

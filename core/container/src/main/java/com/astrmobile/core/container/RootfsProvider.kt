@@ -64,20 +64,36 @@ class RootfsProvider(
         return downloader.ensure(onDownload).map { archiveOf(it) }
     }
 
-    /** 用户从系统文件选择器导入的归档：拷进缓存目录，再按正常流程解压。 */
+    /**
+     * 用户从系统文件选择器导入的归档：先拷到临时文件，校验通过才替换正式文件。
+     *
+     * 不能直接覆盖正式文件：用户传错一个文件（很常见，从网盘里随手点一个），
+     * 覆盖之后原有的好包就没了，还得重下 61MB。校验通过再 rename，
+     * 失败时只删临时文件，缓存原样不动。
+     */
     fun adoptImportedFile(source: File): Result<RootfsArchive> = runCatching {
         require(source.exists() && source.length() > 0L) { "文件不存在或为空" }
         cacheDir.mkdirs()
-        val target = downloader.target
-        source.copyTo(target, overwrite = true)
 
-        require(RootfsPackage.matches(RootfsPackage.SHA256, RootfsPackage.sha256Of(target))) {
-            "这个文件不是本版本所需的系统包（校验值不匹配）。请确认选的是 Ubuntu rootfs 归档。"
+        val staging = File(cacheDir, "import-staging.tar.xz")
+        runCatching { staging.delete() }
+        source.copyTo(staging, overwrite = true)
+
+        val actual = RootfsPackage.sha256Of(staging)
+        if (!RootfsPackage.matches(RootfsPackage.SHA256, actual)) {
+            staging.delete()
+            error(
+                "这个文件不是本版本所需的系统包（校验值 ${actual.take(12)}…，" +
+                    "期望 ${RootfsPackage.SHA256.take(12)}…）。请确认选的是 Ubuntu rootfs 归档。",
+            )
+        }
+
+        val target = downloader.target
+        if (!staging.renameTo(target)) {
+            staging.copyTo(target, overwrite = true)
+            staging.delete()
         }
         archiveOf(target)
-    }.onFailure {
-        // 导入失败不能留下一个"看起来存在但没用"的文件，否则下次启动会反复解压失败
-        runCatching { downloader.target.delete() }
     }
 
     private fun bundledArchive(): RootfsArchive? {

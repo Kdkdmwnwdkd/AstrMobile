@@ -63,6 +63,18 @@ class CostDiagnosisTest {
     }
 
     @Test
+    fun `模型没有牌价时要说明白而不是判正常`() {
+        val hint = CostDiagnosis.analyze(
+            snapshot(120_000, 8, cost = 0.0, unpriced = 120_000).copy(
+                unpricedModels = listOf("mystery-proxy-v1"),
+            ),
+        )!!
+        assertEquals(CostDiagnosis.LEVEL_WATCH, hint.level)
+        assertTrue(hint.headline.contains("没有牌价"))
+        assertTrue(hint.detail.contains("mystery-proxy-v1"))
+    }
+
+    @Test
     fun `单价分母只用有牌价的 token`() {
         val snap = snapshot(100_000, 10, cost = 1.0, unpriced = 50_000)
         // 1 元 / 5 万有价 token = 20 元/百万，而不是 10 元
